@@ -1,0 +1,766 @@
+[
+  {
+    "node_id": "1.1_security_control_types",
+    "domain": "1.0 General Security Concepts",
+    "sub_objective": "1.1 Compare and contrast various types of security controls.",
+    "key_terms": [
+      "Technical",
+      "Managerial",
+      "Operational",
+      "Physical",
+      "Preventive",
+      "Deterrent",
+      "Detective",
+      "Corrective",
+      "Compensating",
+      "Directive"
+    ],
+    "required_acronyms": [
+      "ACL",
+      "SIEM",
+      "EDR"
+    ],
+    "common_misconceptions": [
+      "Believing an operational control refers to technical appliance configuration",
+      "Confusing deterrent controls with preventive controls"
+    ],
+    "refactor_sample_flawed_text": "Installing a warning sign about video surveillance is a preventive technical control because it stops intrusions.",
+    "refactor_sample_corrected_text": "Installing a warning sign is a deterrent physical/managerial control meant to discourage unauthorized actions, whereas a preventive technical control would be an IPS rule or access control list that actively blocks unauthorized traffic.",
+    "pbq_sample_log_snippet": "AUTH_AUDIT: User 'svc-backup' failed 5 attempts; AccountLocked: TRUE; Action: Account disabled by directory service policy [Corrective/Technical]"
+  },
+  {
+    "node_id": "1.2_fundamental_security_concepts",
+    "domain": "1.0 General Security Concepts",
+    "sub_objective": "1.2 Summarize fundamental security concepts.",
+    "key_terms": [
+      "Confidentiality",
+      "Integrity",
+      "Availability",
+      "Non-repudiation",
+      "Authentication",
+      "Authorization",
+      "Accounting",
+      "Zero Trust",
+      "Policy Engine",
+      "Policy Administrator",
+      "Policy Enforcement Point",
+      "Honeynet",
+      "Honeytoken"
+    ],
+    "required_acronyms": [
+      "CIA",
+      "AAA",
+      "PEP",
+      "PDP"
+    ],
+    "common_misconceptions": [
+      "Assuming a honeypot's primary purpose is offensive counter-hacking",
+      "Treating the Zero Trust Data Plane as a location where policy authorization decisions are calculated"
+    ],
+    "refactor_sample_flawed_text": "Our Zero Trust engine resides on the edge switch where the Policy Enforcement Point generates and authorizes dynamic access control decisions for client endpoints.",
+    "refactor_sample_corrected_text": "In a Zero Trust architecture, dynamic policy decisions are computed in the Control Plane by the Policy Engine and distributed by the Policy Administrator, while the Policy Enforcement Point in the Data Plane merely enforces those decisions on traffic flows.",
+    "pbq_sample_log_snippet": "ZTA-GATEWAY: Subject='usr_finance01' TrustScore='42/100' PolicyEngine_Decision='DENY_ACCESS' Context='Impossible_Travel_Anomaly' PEP_Action='DROP_SESSION'"
+  },
+  {
+    "node_id": "1.4_cryptographic_solutions",
+    "domain": "1.0 General Security Concepts",
+    "sub_objective": "1.4 Explain the importance of using appropriate cryptographic solutions.",
+    "key_terms": [
+      "Public key infrastructure",
+      "Key escrow",
+      "Hardware security module",
+      "Trusted Platform Module",
+      "Steganography",
+      "Tokenization",
+      "Data masking",
+      "Salting",
+      "Digital signatures",
+      "Key stretching",
+      "OCSP"
+    ],
+    "required_acronyms": [
+      "PKI",
+      "HSM",
+      "TPM",
+      "CRL",
+      "OCSP",
+      "CSR",
+      "PBKDF2"
+    ],
+    "common_misconceptions": [
+      "Confusing tokenization with asymmetric encryption",
+      "Believing salting prevents rainbow table attacks by increasing encryption key size"
+    ],
+    "refactor_sample_flawed_text": "We secured our stored credit card numbers using tokenization, which encrypts the PAN using an asymmetric RSA public key stored directly on the web application server.",
+    "refactor_sample_corrected_text": "We secured our stored credit card numbers using tokenization, which replaces the PAN with a non-sensitive surrogate value (token) generated from a centralized vault, removing the raw cryptographic data from the application server entirely.",
+    "pbq_sample_log_snippet": "PKI-REVOCATION-CHECK: TargetCert='web-srv-corp.internal' Serial='0x4F12A8' Method='OCSP' Responder='http://ocsp.internal-ca.net' Status='REVOKED' Reason='KeyCompromise'"
+  },
+  {
+    "node_id": "2.1_threat_actors_and_motivations",
+    "domain": "2.0 Threats, Vulnerabilities, and Mitigations",
+    "sub_objective": "2.1 Compare and contrast common threat actors and motivations.",
+    "key_terms": [
+      "Nation-state",
+      "Unskilled attacker",
+      "Hacktivist",
+      "Insider threat",
+      "Organized crime",
+      "Shadow IT",
+      "Espionage",
+      "Data exfiltration"
+    ],
+    "required_acronyms": [
+      "APT"
+    ],
+    "common_misconceptions": [
+      "Classifying all organized crime groups as hacktivists seeking political exposure",
+      "Treating Shadow IT solely as malicious external cyber threats"
+    ],
+    "refactor_sample_flawed_text": "The threat actor who compromised our point-of-sale systems was identified as a hacktivist group because they demanded a $2 million Bitcoin ransom to restore operational access.",
+    "refactor_sample_corrected_text": "The threat actor targeting POS systems for monetary ransom represents an organized crime syndicate driven by financial gain, whereas hacktivists are typically motivated by political, environmental, or philosophical ideologies.",
+    "pbq_sample_log_snippet": "INTEL_FEED: Actor='APT29' Category='Nation-State' TTP='Living-off-the-Land (LotL)' Motivation='Espionage' Target='Defense_Contractor_SCADA'"
+  },
+  {
+    "node_id": "2.2_threat_vectors_and_attack_surfaces",
+    "domain": "2.0 Threats, Vulnerabilities, and Mitigations",
+    "sub_objective": "2.2 Explain common threat vectors and attack surfaces.",
+    "key_terms": [
+      "Vulnerable software",
+      "Supply chain",
+      "Managed service providers",
+      "Pretexting",
+      "Watering hole",
+      "Typosquatting",
+      "Business email compromise"
+    ],
+    "required_acronyms": [
+      "MSP",
+      "BEC",
+      "SMS"
+    ],
+    "common_misconceptions": [
+      "Assuming watering hole attacks target employees through inbound unsolicited emails",
+      "Equating typosquatting directly with direct cross-site scripting vulnerabilities"
+    ],
+    "refactor_sample_flawed_text": "The attacker executed a watering hole attack by emailing weaponized PDF invoices directly to members of the accounts payable team.",
+    "refactor_sample_corrected_text": "The attacker executed a watering hole attack by profiling the target organization's vendor relationships and compromising a legitimate third-party website frequently visited by accounts payable staff to deliver drive-by exploits.",
+    "pbq_sample_log_snippet": "PROXY_GATEWAY: SRC='10.10.4.55' DST='http://www.peoples-benk-portal.example.com' HTTP_HOST='peoples-benk-portal.example.com' Flags='Typosquatting_Suspected' RepScore='0/100'"
+  },
+  {
+    "node_id": "2.3_types_of_vulnerabilities",
+    "domain": "2.0 Threats, Vulnerabilities, and Mitigations",
+    "sub_objective": "2.3 Explain various types of vulnerabilities.",
+    "key_terms": [
+      "Memory injection",
+      "Buffer overflow",
+      "Race conditions",
+      "Time-of-check",
+      "Time-of-use",
+      "SQLi",
+      "XSS",
+      "VM escape",
+      "Side loading"
+    ],
+    "required_acronyms": [
+      "TOC/TOU",
+      "SQLi",
+      "XSS",
+      "EOL"
+    ],
+    "common_misconceptions": [
+      "Believing a race condition can only happen across multiple physical servers",
+      "Confusing stored XSS with client-side SQL injection"
+    ],
+    "refactor_sample_flawed_text": "The web app was vulnerable to TOC/TOU because it directly inserted unescaped user input into an administrative database query.",
+    "refactor_sample_corrected_text": "The web app was vulnerable to SQL injection because it directly concatenated unsanitized input into a SQL query; TOC/TOU is a concurrency race condition where system state changes between validation and file execution.",
+    "pbq_sample_log_snippet": "WAF_ALERT: URI='/api/v2/products?cat=1%27%20UNION%20SELECT%20username,password_hash%20FROM%20users--' Action='Blocked' Signature='CWE-89_SQL_Injection'"
+  },
+  {
+    "node_id": "2.4_indicators_of_malicious_activity",
+    "domain": "2.0 Threats, Vulnerabilities, and Mitigations",
+    "sub_objective": "2.4 Given a scenario, analyze indicators of malicious activity.",
+    "key_terms": [
+      "Ransomware",
+      "Trojan",
+      "Rootkit",
+      "Amplified DDoS",
+      "Reflected DDoS",
+      "Credential replay",
+      "Impossible travel",
+      "Password spraying"
+    ],
+    "required_acronyms": [
+      "DDoS",
+      "DNS",
+      "RFID"
+    ],
+    "common_misconceptions": [
+      "Classifying brute-force password guessing as identical to low-and-slow password spraying",
+      "Thinking impossible travel alerts always indicate physical passport compromise"
+    ],
+    "refactor_sample_flawed_text": "The logs indicate a brute force attack against 'jsmith' because 10,000 corporate user accounts were simultaneously accessed using one single password attempt: 'Summer2023!'.",
+    "refactor_sample_corrected_text": "The pattern of testing a single common password ('Summer2023!') against thousands of unique corporate accounts is an indicator of a password spraying attack, which avoids individual account lockouts typical of brute-force attacks.",
+    "pbq_sample_log_snippet": "IDP_AUTH: Event='UserLogin' User='m_chen' ClientIP='198.51.100.12' Loc='New York, US' Timestamp='14:02:11Z'\nIDP_AUTH: Event='UserLogin' User='m_chen' ClientIP='203.0.113.88' Loc='Tokyo, JP' Timestamp='14:11:45Z' Status='Flagged_ImpossibleTravel'"
+  },
+  {
+    "node_id": "2.5_mitigation_techniques",
+    "domain": "2.0 Threats, Vulnerabilities, and Mitigations",
+    "sub_objective": "2.5 Explain the purpose of mitigation techniques used to secure the enterprise.",
+    "key_terms": [
+      "Segmentation",
+      "Application allow list",
+      "Isolation",
+      "Least privilege",
+      "Hardening techniques",
+      "Host-based firewall",
+      "HIPS"
+    ],
+    "required_acronyms": [
+      "ACL",
+      "HIPS",
+      "EDR"
+    ],
+    "common_misconceptions": [
+      "Assuming endpoint protection alone removes the need to change default credentials",
+      "Believing network segmentation prevents host-level privilege escalation"
+    ],
+    "refactor_sample_flawed_text": "To prevent lateral movement inside the server farm, we installed host-based firewalls to eliminate the necessity for least privilege assignments in our active directory infrastructure.",
+    "refactor_sample_corrected_text": "Host-based firewalls restrict network traffic between nodes to contain lateral traversal, but strict least-privilege role assignments remain essential to limit the radius of an adversary using compromised privileged credentials within reachable endpoints.",
+    "pbq_sample_log_snippet": "OS-APPLOCKER: Process='C:\\Users\\TempUser\\Downloads\\mimikatz.exe' Parent='cmd.exe' Status='Blocked' Policy='Enforce_Allowed_Executables_HashRule'"
+  },
+  {
+    "node_id": "3.1_security_architecture_models",
+    "domain": "3.0 Security Architecture",
+    "sub_objective": "3.1 Compare and contrast security implications of different architecture models.",
+    "key_terms": [
+      "Responsibility matrix",
+      "Infrastructure as code",
+      "Serverless",
+      "Microservices",
+      "Air-gapped",
+      "Software-defined networking",
+      "Containerization",
+      "SCADA",
+      "RTOS"
+    ],
+    "required_acronyms": [
+      "IaC",
+      "SDN",
+      "ICS",
+      "SCADA",
+      "RTOS"
+    ],
+    "common_misconceptions": [
+      "Assuming PaaS cloud models transfer OS patching duties to the customer",
+      "Treating containerization isolation boundaries as entirely hardware-virtualized hypervisors"
+    ],
+    "refactor_sample_flawed_text": "In a cloud PaaS model, our internal infrastructure security team retains exclusive responsibility for patching the underlying hypervisor and host operating system.",
+    "refactor_sample_corrected_text": "Under the cloud Shared Responsibility Matrix for PaaS, the cloud provider manages and patches the physical hardware, hypervisor, and operating system, while the enterprise customer secures the deployed applications, data, and configurations.",
+    "pbq_sample_log_snippet": "TERRAFORM_SCAN: Resource='aws_s3_bucket.customer_data' Rule='Check_Public_Read_Write' Violation='acl=public-read' Compliance='FAIL_CIS_BENCHMARK'"
+  },
+  {
+    "node_id": "3.2_enterprise_infrastructure_principles",
+    "domain": "3.0 Security Architecture",
+    "sub_objective": "3.2 Given a scenario, apply security principles to secure enterprise infrastructure.",
+    "key_terms": [
+      "Fail-open",
+      "Fail-closed",
+      "Inline",
+      "Tap/monitor",
+      "Jump server",
+      "Web application firewall",
+      "Unified threat management",
+      "Next-generation firewall",
+      "802.1X",
+      "SASE"
+    ],
+    "required_acronyms": [
+      "WAF",
+      "UTM",
+      "NGFW",
+      "EAP",
+      "VPN",
+      "SASE",
+      "SD-WAN"
+    ],
+    "common_misconceptions": [
+      "Choosing fail-open settings for authentication gateways when maximum security is mandated",
+      "Believing a standard Layer 4 firewall protects against SQL injection in HTTP payloads"
+    ],
+    "refactor_sample_flawed_text": "To ensure maximum confidentiality and protect against unauthorized network intrusion during appliance crashes, our primary gateway firewall was configured to fail-open.",
+    "refactor_sample_corrected_text": "To optimize confidentiality and stop unauthorized traversal during hardware or software failure, the network security controls must be configured to fail-closed, blocking all traffic until operations are restored.",
+    "pbq_sample_log_snippet": "RADIUS_SRV: ClientMAC='00-1B-44-11-3A-B7' SwitchPort='Gi1/0/12' AuthProto='802.1X/EAP-TLS' Status='EAP_SUCCESS' Assigned_VLAN='VLAN_10_CORP'"
+  },
+  {
+    "node_id": "3.3_data_protection_strategies",
+    "domain": "3.0 Security Architecture",
+    "sub_objective": "3.3 Compare and contrast concepts and strategies to protect data.",
+    "key_terms": [
+      "Data at rest",
+      "Data in transit",
+      "Data in use",
+      "Data sovereignty",
+      "Geolocation",
+      "Data masking",
+      "Tokenization"
+    ],
+    "required_acronyms": [
+      "DLP",
+      "TLS"
+    ],
+    "common_misconceptions": [
+      "Assuming data in use is secured using IPsec transport pipelines",
+      "Believing data sovereignty laws allow customer records to be processed in any jurisdiction if encrypted"
+    ],
+    "refactor_sample_flawed_text": "To secure data in use within active system RAM during calculations, the administrator applied an external TLS tunnel to encrypt runtime memory pointers.",
+    "refactor_sample_corrected_text": "TLS encrypts data in transit across networks. To protect data in use during active execution, systems utilize secure enclaves, confidential computing hardware, or runtime memory protection mechanisms.",
+    "pbq_sample_log_snippet": "DLP-ENGINE: Action='REDACT_OUTBOUND' RuleID='PCI-DSS_PAN_RULE' Dest='external-partner-smtp.net' Pattern='4111-XXXX-XXXX-1111' Masking='Applied'"
+  },
+  {
+    "node_id": "3.4_resilience_and_recovery",
+    "domain": "3.0 Security Architecture",
+    "sub_objective": "3.4 Explain the importance of resilience and recovery in security architecture.",
+    "key_terms": [
+      "High availability",
+      "Hot site",
+      "Cold site",
+      "Warm site",
+      "Geographic dispersion",
+      "Tabletop exercises",
+      "Fail over",
+      "Snapshots",
+      "Journaling"
+    ],
+    "required_acronyms": [
+      "HA",
+      "UPS",
+      "MTBF",
+      "MTTR"
+    ],
+    "common_misconceptions": [
+      "Thinking cold sites are pre-populated with synced, real-time database mirrors",
+      "Confusing high-availability load balancing with zero-loss data replication"
+    ],
+    "refactor_sample_flawed_text": "Our secondary DR location is configured as a cold site, which guarantees an operational RTO of under 5 minutes with fully running synchronous database clusters.",
+    "refactor_sample_corrected_text": "A cold site consists of facility space, power, and environmental controls without operational hardware or live data, making a 5-minute RTO impossible; near-instantaneous failover requires a hot site running synchronous replication.",
+    "pbq_sample_log_snippet": "DR-FAILOVER: Primary='Datacenter-Alpha' Status='CRITICAL_OFFLINE' Trigger='AUTOMATED_DNS_FAILOVER' Secondary='Datacenter-Bravo' HA_State='ACTIVE_MIRROR'"
+  },
+  {
+    "node_id": "4.1_common_security_techniques_computing_resources",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.1 Given a scenario, apply common security techniques to computing resources.",
+    "key_terms": [
+      "Secure baselines",
+      "Mobile device management",
+      "BYOD",
+      "COPE",
+      "CYOD",
+      "WPA3",
+      "Code signing",
+      "Sandboxing",
+      "Input validation"
+    ],
+    "required_acronyms": [
+      "MDM",
+      "BYOD",
+      "COPE",
+      "WPA3",
+      "RADIUS",
+      "RTOS"
+    ],
+    "common_misconceptions": [
+      "Believing code signing guarantees that executable logic contains zero software vulnerabilities",
+      "Assuming BYOD gives an employer total ownership to wipe an employee's personal photos without segmentation"
+    ],
+    "refactor_sample_flawed_text": "We verified the security of third-party software because the executable was code-signed, which proves it is inherently free of exploitable logic errors and vulnerabilities.",
+    "refactor_sample_corrected_text": "Code signing only verifies author identity and proves file integrity since signature application; it does not validate code safety or guarantee the absence of software bugs and zero-day vulnerabilities.",
+    "pbq_sample_log_snippet": "MDM_ENROLL: DeviceID='dev-android-8921' Model='Pixel 7' Ownership='BYOD' ComplianceCheck='Passed' EnterprisePartition='ENCRYPTED' PersonalArea='ISOLATED'"
+  },
+  {
+    "node_id": "4.2_hardware_software_data_asset_management",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.2 Explain the security implications of proper hardware, software, and data asset management.",
+    "key_terms": [
+      "Procurement process",
+      "Sanitization",
+      "Destruction",
+      "Certification",
+      "Data retention",
+      "Enumeration"
+    ],
+    "required_acronyms": [
+      "EOL",
+      "EOSL"
+    ],
+    "common_misconceptions": [
+      "Assuming high-level standard OS formatting makes magnetic media non-recoverable",
+      "Believing end-of-service-life (EOSL) assets continue to receive vendor-supplied firmware security updates"
+    ],
+    "refactor_sample_flawed_text": "Before disposing of server hard drives containing confidential HIPAA files, technicians executed a standard quick format to guarantee complete data destruction.",
+    "refactor_sample_corrected_text": "A quick format merely resets file partition tables, leaving raw data retrievable; secure asset disposal requires cryptographic wipe, multiple-pass degaussing, or physical shredding alongside a certificate of destruction.",
+    "pbq_sample_log_snippet": "ASSET-LOG: SerialNumber='WD-WCC4N7128912' Action='DEGAUSS_AND_SHRED' Operator='SEC_OPS_3' CertID='CERT-DEST-2023-8821' Status='COMPLETED'"
+  },
+  {
+    "node_id": "4.3_vulnerability_management_activities",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.3 Explain various activities associated with vulnerability management.",
+    "key_terms": [
+      "Static analysis",
+      "Dynamic analysis",
+      "Threat feed",
+      "Penetration testing",
+      "Bug bounty",
+      "Common Vulnerability Scoring System",
+      "Common Vulnerability Enumeration"
+    ],
+    "required_acronyms": [
+      "CVSS",
+      "CVE",
+      "OSINT",
+      "SAST",
+      "DAST"
+    ],
+    "common_misconceptions": [
+      "Equating SAST (white-box source evaluation) with runtime DAST scanning",
+      "Assuming a CVSS base score accounts for an organization's specific environmental compensations without metric adjustments"
+    ],
+    "refactor_sample_flawed_text": "The development team executed dynamic application security testing (DAST) by checking the raw uncompiled source code repository directly for hardcoded credentials.",
+    "refactor_sample_corrected_text": "Reviewing uncompiled code in repository repositories is Static Application Security Testing (SAST); Dynamic Application Security Testing (DAST) assesses running web applications externally without underlying source visibility.",
+    "pbq_sample_log_snippet": "VULN-SCAN: Target='172.16.88.10' CVE='CVE-2021-44228' CVSS_Base='10.0' CVSS_Env='4.2' PatchStatus='MISSING' CompensatingControl='WAF_Filter_Enabled'"
+  },
+  {
+    "node_id": "4.4_security_alerting_and_monitoring",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.4 Explain security alerting and monitoring concepts and tools.",
+    "key_terms": [
+      "Log aggregation",
+      "Alert tuning",
+      "Security information and event management",
+      "Data loss prevention",
+      "SNMP traps",
+      "NetFlow"
+    ],
+    "required_acronyms": [
+      "SIEM",
+      "DLP",
+      "SNMP",
+      "SCAP"
+    ],
+    "common_misconceptions": [
+      "Assuming NetFlow data captures the full layer 7 payload content of network communications",
+      "Treating SIEM correlation rules as totally static controls that require no continuous tuning"
+    ],
+    "refactor_sample_flawed_text": "The digital investigator extracted full plaintext email attachments directly from the NetFlow export logs captured by the core switch.",
+    "refactor_sample_corrected_text": "NetFlow collects statistical metadata including source/destination IP addresses, port numbers, timestamps, and packet counts, but does not capture raw application layer payload strings or transmitted attachments.",
+    "pbq_sample_log_snippet": "FLOW-RECORD: SrcIP='10.0.0.14' DstIP='198.51.100.99' SrcPort=49212 DstPort=443 Protocol=6 Packets=4892 Bytes=7293818 FlowDuration=142s"
+  },
+  {
+    "node_id": "4.5_modify_enterprise_capabilities",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.5 Given a scenario, modify enterprise capabilities to enhance security.",
+    "key_terms": [
+      "Screened subnets",
+      "Web filter",
+      "SELinux",
+      "Domain-based Message Authentication Reporting and Conformance",
+      "DomainKeys Identified Mail",
+      "Sender Policy Framework",
+      "File integrity monitoring"
+    ],
+    "required_acronyms": [
+      "DMARC",
+      "DKIM",
+      "SPF",
+      "FIM",
+      "NAC",
+      "EDR",
+      "XDR"
+    ],
+    "common_misconceptions": [
+      "Thinking SPF alone provides cryptographic tamper-proof validation of email message headers",
+      "Assuming File Integrity Monitoring prevents unauthorized file changes in real-time before writes finish"
+    ],
+    "refactor_sample_flawed_text": "We implemented SPF to cryptographically sign our emails with a private key, ensuring attackers could not alter the message body while in transit.",
+    "refactor_sample_corrected_text": "SPF publishes authorized sending IP addresses in DNS records to prevent sender address spoofing. Cryptographic signing of email messages and integrity validation is achieved using DKIM, coordinated with DMARC policies.",
+    "pbq_sample_log_snippet": "MAIL_GW: From='ceo@example.com' ClientIP='203.0.113.5' SPF='Fail' DKIM='None' DMARC='Reject' Action='Quarantined_Message_P1'"
+  },
+  {
+    "node_id": "4.6_identity_and_access_management",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.6 Given a scenario, implement and maintain identity and access management.",
+    "key_terms": [
+      "Federation",
+      "Single sign-on",
+      "Mandatory access control",
+      "Discretionary access control",
+      "Role-based access control",
+      "Attribute-based access control",
+      "Multifactor authentication",
+      "Ephemeral credentials"
+    ],
+    "required_acronyms": [
+      "IAM",
+      "SSO",
+      "LDAP",
+      "OAuth",
+      "SAML",
+      "MAC",
+      "DAC",
+      "RBAC",
+      "ABAC",
+      "MFA",
+      "PAM"
+    ],
+    "common_misconceptions": [
+      "Assuming combining a password with a PIN counts as valid two-factor authentication",
+      "Treating DAC as centrally dictated access determined strictly by system-level labels"
+    ],
+    "refactor_sample_flawed_text": "Our portal satisfies two-factor authentication because users enter their primary corporate password followed immediately by an 8-digit secret PIN.",
+    "refactor_sample_corrected_text": "A password and a PIN both represent the same single authentication factor (Something You Know). Multi-factor authentication requires combining distinct factors, such as a password (Something You Know) and a hardware token code (Something You Have).",
+    "pbq_sample_log_snippet": "SSO-SAML-AUDIT: AssertionID='_f8a92b' Subject='user.smith' IDP='okta' SP='salesforce' Factor1='PWD' Factor2='FIDO2_Yubikey' AuthStatus='SUCCESS'"
+  },
+  {
+    "node_id": "4.7_automation_and_orchestration",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.7 Explain the importance of automation and orchestration related to secure operations.",
+    "key_terms": [
+      "Continuous integration and testing",
+      "Application programming interfaces",
+      "Technical debt",
+      "Single point of failure",
+      "Workforce multiplier"
+    ],
+    "required_acronyms": [
+      "API",
+      "CI/CD",
+      "SOAR"
+    ],
+    "common_misconceptions": [
+      "Believing automation scripts completely eliminate the risk of propagating enterprise configuration errors",
+      "Treating SOAR playbooks as zero-maintenance deployments"
+    ],
+    "refactor_sample_flawed_text": "Implementing automated infrastructure scripting ensures configuration drift and errors are completely eradicated without any need to manage technical debt.",
+    "refactor_sample_corrected_text": "While automation enforces consistent deployments and serves as an operational workforce multiplier, flawed scripts can systematically deploy security misconfigurations across an entire fleet, accumulating significant technical debt if not validated via testing frameworks.",
+    "pbq_sample_log_snippet": "SOAR_PLAYBOOK: Name='Phish_Remediation_Auto' Trigger='UserReport' Step='CheckHeaders' Status='Malicious' Step='PurgeFleetMailboxes' Count=412 Duration=8.4s"
+  },
+  {
+    "node_id": "4.8_incident_response_activities",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.8 Explain appropriate incident response activities.",
+    "key_terms": [
+      "Preparation",
+      "Detection",
+      "Analysis",
+      "Containment",
+      "Eradication",
+      "Recovery",
+      "Lessons learned",
+      "Legal hold",
+      "Chain of custody",
+      "E-discovery"
+    ],
+    "required_acronyms": [
+      "IR",
+      "IRP"
+    ],
+    "common_misconceptions": [
+      "Performing host rebooting and disk wiping before securing volatile forensic RAM images",
+      "Executing the Eradication phase before isolating compromised network systems during Containment"
+    ],
+    "refactor_sample_flawed_text": "Immediately upon detecting an active ransomware attack on a key server, the analyst rebooted the computer and re-imaged the OS before isolating the host network port.",
+    "refactor_sample_corrected_text": "The incident responder must prioritize Containment by logically isolating the infected host from the network and preserving volatile memory artifacts before moving to Eradication and system restoration.",
+    "pbq_sample_log_snippet": "IR-CUSTODY: EvidenceID='DISK-IMG-SRV04' Hash='e3b0c44298fc1c149afbf4c8996fb924' AcquiredBy='Forensics_Lead' SecuredIn='EvidenceLockerB' TamperSeal='UNBROKEN'"
+  },
+  {
+    "node_id": "4.9_data_sources_for_investigations",
+    "domain": "4.0 Security Operations",
+    "sub_objective": "4.9 Given a scenario, use data sources to support an investigation.",
+    "key_terms": [
+      "Firewall logs",
+      "Endpoint logs",
+      "OS-specific security logs",
+      "IPS/IDS logs",
+      "Packet captures",
+      "Metadata"
+    ],
+    "required_acronyms": [
+      "PCAP",
+      "SIEM"
+    ],
+    "common_misconceptions": [
+      "Assuming modern full packet captures allow inspection of end-to-end encrypted TLS payloads without session keys or proxy termination",
+      "Treating DNS server logs as incapable of exposing command-and-control communication"
+    ],
+    "refactor_sample_flawed_text": "The investigator confirmed the exact exfiltrated data contents directly by reviewing the raw TCP streams in a PCAP where the endpoints negotiated TLS 1.3.",
+    "refactor_sample_corrected_text": "Because TLS 1.3 provides end-to-end cryptographic confidentiality, the contents of the payload cannot be determined directly from a raw PCAP capture without the ephemeral session decryption keys or proxy-based SSL inspection.",
+    "pbq_sample_log_snippet": "SYS-SEC-LOG: EventID=4624 LogonType=3 User='svc_sql' Workstation='WIN-DEV-12' TargetDomainName='CORP' Status='Audit Success'"
+  },
+  {
+    "node_id": "5.1_effective_security_governance",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.1 Summarize elements of effective security governance.",
+    "key_terms": [
+      "Acceptable use policy",
+      "Business continuity",
+      "Disaster recovery",
+      "Data owners",
+      "Data controllers",
+      "Data processors",
+      "Data custodians"
+    ],
+    "required_acronyms": [
+      "AUP",
+      "SDLC",
+      "BCP",
+      "DRP"
+    ],
+    "common_misconceptions": [
+      "Confusing the roles of data owners (defining classification) with data custodians (implementing controls)",
+      "Believing security policies carry optional procedural guidelines rather than mandatory organizational rules"
+    ],
+    "refactor_sample_flawed_text": "The data custodian is the executive officer who legally owns corporate intellectual property and determines its data classification and retention periods.",
+    "refactor_sample_corrected_text": "The data owner is the business stakeholder who classifies the asset and sets operational requirements, whereas the data custodian is the technical role tasked with configuring the storage, backups, and access controls to enforce those rules.",
+    "pbq_sample_log_snippet": "GOV-AUDIT: PolicyDoc='SEC-POL-AUP-2023' Version=4.1 Scope='All_Employees' Approval='Board_Steering_Committee' Mandate='Signed_Acknowledgment_Required'"
+  },
+  {
+    "node_id": "5.2_risk_management_processes",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.2 Explain elements of the risk management process.",
+    "key_terms": [
+      "Single loss expectancy",
+      "Annualized loss expectancy",
+      "Annualized rate of occurrence",
+      "Exposure factor",
+      "Risk appetite",
+      "Business impact analysis",
+      "Recovery time objective",
+      "Recovery point objective"
+    ],
+    "required_acronyms": [
+      "SLE",
+      "ALE",
+      "ARO",
+      "EF",
+      "BIA",
+      "RTO",
+      "RPO",
+      "MTTR",
+      "MTBF"
+    ],
+    "common_misconceptions": [
+      "Calculating ALE by dividing SLE by ARO instead of multiplying them",
+      "Confusing RTO (maximum acceptable operational downtime) with RPO (maximum acceptable transactional data loss)"
+    ],
+    "refactor_sample_flawed_text": "Our database has an RTO of 15 minutes, meaning the business can tolerate losing up to 15 minutes of historical transactional records during an unscheduled outage.",
+    "refactor_sample_corrected_text": "The maximum acceptable volume of transactional data loss measured in time is the Recovery Point Objective (RPO); the Recovery Time Objective (RTO) dictates the maximum duration allowed to restore functional system operations.",
+    "pbq_sample_log_snippet": "RISK_CALC: AssetValue='$500,000' ExposureFactor='0.40' SLE='$200,000' ARO='0.5' ALE='$100,000' RiskStrategy='Mitigate_Via_Redundancy'"
+  },
+  {
+    "node_id": "5.3_third_party_risk_management",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.3 Explain the processes associated with third-party risk assessment and management.",
+    "key_terms": [
+      "Right-to-audit clause",
+      "Supply chain analysis",
+      "Service-level agreement",
+      "Memorandum of understanding",
+      "Master service agreement",
+      "Non-disclosure agreement",
+      "Business partners agreement"
+    ],
+    "required_acronyms": [
+      "SLA",
+      "MOA",
+      "MOU",
+      "MSA",
+      "SOW",
+      "NDA",
+      "BPA"
+    ],
+    "common_misconceptions": [
+      "Assuming a basic non-disclosure agreement guarantees external security controls match enterprise regulatory requirements",
+      "Treating an MOU as a legally binding contract defining measurable technical uptime penalties"
+    ],
+    "refactor_sample_flawed_text": "We enforced 99.999% uptime metrics and financial service credits against our third-party SaaS cloud vendor using an informal Memorandum of Understanding (MOU).",
+    "refactor_sample_corrected_text": "Operational uptime standards and enforceable financial penalties are governed by formal Service-Level Agreements (SLAs) embedded within contracts, whereas an MOU serves as an informal declaration of mutual intent lacking monetary recourse.",
+    "pbq_sample_log_snippet": "VENDOR_CONTRACT: Partner='CloudHost_Inc' Type='Master_Service_Agreement' SLA_Uptime='99.9%' RightToAudit='Bi-Annual_Clause_Active' NDA_Status='SIGNED'"
+  },
+  {
+    "node_id": "5.4_effective_security_compliance",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.4 Summarize elements of effective security compliance.",
+    "key_terms": [
+      "Consequences of non-compliance",
+      "Due diligence",
+      "Due care",
+      "Attestation",
+      "Data subject",
+      "Data controller",
+      "Data processor",
+      "Right to be forgotten"
+    ],
+    "required_acronyms": [
+      "GDPR",
+      "PCI-DSS",
+      "HIPAA"
+    ],
+    "common_misconceptions": [
+      "Assuming corporate data controllers transfer all legal regulatory liability away by outsourcing workloads to a cloud data processor",
+      "Confusing due diligence (the investigation and risk verification phase) with due care (the execution of prudent protection activities)"
+    ],
+    "refactor_sample_flawed_text": "Because we migrated our customer records to an external cloud database processor, our firm is completely exempt from regulatory fines if that processor experiences a data breach.",
+    "refactor_sample_corrected_text": "The organization serving as the Data Controller retains core legal accountability to data protection authorities; delegating technical handling to a Data Processor does not eliminate compliance liability or regulatory fines for controller oversight failures.",
+    "pbq_sample_log_snippet": "PRIVACY-AUDIT: ReqType='GDPR_Article_17' SubjectID='sub-90214' Action='Erasure_Request' TargetTables='Customer_PII' Status='Verified_Purged'"
+  },
+  {
+    "node_id": "5.5_audits_and_assessments",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.5 Explain types and purposes of audits and assessments.",
+    "key_terms": [
+      "Internal audits",
+      "External assessments",
+      "Penetration testing",
+      "Known environment",
+      "Partially known environment",
+      "Unknown environment",
+      "Passive reconnaissance",
+      "Active reconnaissance"
+    ],
+    "required_acronyms": [
+      "SOC",
+      "OSINT"
+    ],
+    "common_misconceptions": [
+      "Assuming passive reconnaissance involves scanning target infrastructure with Nmap port probes",
+      "Equating automated vulnerability assessments with penetration tests that exploit attack paths"
+    ],
+    "refactor_sample_flawed_text": "The penetration tester conducted passive reconnaissance by running SYN port scans and sending direct directory fuzzing requests to the client's public web server.",
+    "refactor_sample_corrected_text": "Sending active SYN packets or fuzzing requests directly against target infrastructure constitutes active reconnaissance; passive reconnaissance gathers data indirectly without interacting directly with the target systems (e.g., querying public DNS records, searching WHOIS, or scraping OSINT repositories).",
+    "pbq_sample_log_snippet": "PENTEST-ENGAGEMENT: Type='Partially_Known' Scope='198.51.100.0/24' ReconMethod='OSINT_Harvesting' Tool='theHarvester' PacketsTransmittedToTarget=0"
+  },
+  {
+    "node_id": "5.6_security_awareness_practices",
+    "domain": "5.0 Security Program Management and Oversight",
+    "sub_objective": "5.6 Given a scenario, implement security awareness practices.",
+    "key_terms": [
+      "Phishing campaigns",
+      "Anomalous behavior recognition",
+      "Insider threat",
+      "Operational security",
+      "Removable media",
+      "Social engineering"
+    ],
+    "required_acronyms": [
+      "AUP",
+      "OPSEC",
+      "USB"
+    ],
+    "common_misconceptions": [
+      "Believing technical email gateways remove the requirement for recurring employee awareness training",
+      "Treating phishing training as a purely punitive disciplinary measure rather than behavioral remediation"
+    ],
+    "refactor_sample_flawed_text": "Since our enterprise email gateway blocks 99% of spam, we removed user phishing training and mandated immediate employment termination for any employee who plugs in an unidentified thumb drive.",
+    "refactor_sample_corrected_text": "Because modern threats exploit the human layer, continuous security awareness campaigns and phishing simulations are necessary compensating controls; accidental policy violations should be addressed with adaptive re-education and progressive remediation rather than purely punitive termination programs.",
+    "pbq_sample_log_snippet": "AWARENESS_PORTAL: Campaign='Q3-CredentialHarvest' Sent=1250 Opened=320 Clicked=42 Reported=814 RemediationAssigned='Module-3-SocialEngineering'"
+  }
+]
