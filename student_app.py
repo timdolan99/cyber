@@ -516,7 +516,7 @@ elif st.session_state.app_mode == "exam_mode":
 
             st.warning(
                 f"**Targeted Conceptual Gaps Identified:** Your performance dropped below threshold in: **{missed_list_str}**.\n\n"
-                f"• **Key Acronyms & Terms to Review:** `{acronyms_str}`\n" if 'acronyms_str' in locals() else f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" +
+                f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" if 'acronyms_str' in locals() else f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" +
                 "• **Technical Recommendations:** Review specific protocol headers, secure deployment boundaries, "
                 "and log anomaly signatures for these specific weak domains."
             )
