@@ -1,4 +1,3 @@
-import importlib
 import json
 import os
 import re
@@ -59,7 +58,6 @@ if raw_key:
     os.environ["GEMINI_API_KEY"] = str(raw_key).strip()
 
 import socratic_cag_fsm as fsm
-importlib.reload(fsm)
 
 # --- Warm-up Server-Side Context Cache once on Streamlit Startup ---
 @st.cache_resource
@@ -280,7 +278,7 @@ def reset_session():
     st.session_state.exam_submitted = False
     st.rerun()
 
-# --- Sidebar Exam Mode Trigger ---
+# --- Sidebar Exam Mode & Progress Tracker Trigger ---
 with st.sidebar:
     st.write("---")
     if st.button("Simulate CompTIA Exam Mode", use_container_width=True):
@@ -290,6 +288,14 @@ with st.sidebar:
         st.session_state.exam_user_answers = {}
         st.session_state.exam_submitted = False
         st.rerun()
+
+    if st.button("Return to Main Menu", use_container_width=True):
+        reset_session()
+
+    st.write("---")
+    st.subheader("Progress Tracker")
+    if st.button("Open Progress Tracker", use_container_width=True):
+        st.info("📊 **Progress Tracker:** This dashboard is coming soon. Stay tuned!")
 
 # --- Dynamic Screen Router ---
 
@@ -498,25 +504,22 @@ elif st.session_state.app_mode == "exam_mode":
 
         st.markdown("### 🧠 Granular Examiner Misconception & Literacy Analysis:")
         
-        # Filter strictly for domains scoring below 75%
         true_missed_domains = [dom for dom, stats in domain_stats.items() if (stats["correct"] / stats["total"]) < 0.75]
 
         if true_missed_domains:
             missed_list_str = ", ".join(true_missed_domains)
             
-            # Extract specific acronyms associated with missed items
             flagged_acronyms = []
             combined_missed_blob = " ".join(missed_questions_text)
             potential_acros = re.findall(r'\b[A-Z]{2,6}\b', combined_missed_blob)
             
-            # Exclude common stop words or headers
             stopwords = {"TCP", "SYN", "GET", "HTTP", "PDF", "API"}
             unique_acron_gaps = [a for a in list(set(potential_acros)) if a not in stopwords][:6]
             acronym_str = ", ".join(unique_acron_gaps) if unique_acron_gaps else "SIEM, PKI, LDAP, RPO/RTO"
 
             st.warning(
                 f"**Targeted Conceptual Gaps Identified:** Your performance dropped below threshold in: **{missed_list_str}**.\n\n"
-                f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" if 'acronyms_str' in locals() else f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" +
+                f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n"
                 "• **Technical Recommendations:** Review specific protocol headers, secure deployment boundaries, "
                 "and log anomaly signatures for these specific weak domains."
             )
@@ -643,29 +646,23 @@ elif st.session_state.app_mode == "socratic_drill":
         st.session_state.messages.append({"role": "student", "content": user_input})
         st.rerun()
 
+    # Instant Token Streaming (Blocking status spinner removed for maximum performance)
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "student":
-        with st.status("Analyzing your answer against Security+ objective rubrics...", expanded=True) as status:
-            st.write("• Checking required acronyms & technical terms...")
-            st.write("• Evaluating architectural control mechanisms...")
-            
-            full_stream = ""
-            if st.session_state.is_freestyle:
-                generator = stream_freestyle_socratic_response(
-                    messages=st.session_state.messages,
-                    custom_prompt=st.session_state.freestyle_prompt,
-                    focus_mode=st.session_state.freestyle_focus
-                )
-            else:
-                generator = stream_socratic_response(
-                    messages=st.session_state.messages,
-                    sub_topic=st.session_state.active_subtopic,
-                    node_id=st.session_state.active_node_id or ""
-                )
-            
-            for chunk in generator:
-                full_stream += extract_clean_text(chunk)
-                
-            status.update(label="Analysis complete!", state="complete", expanded=False)
+        if st.session_state.is_freestyle:
+            generator = stream_freestyle_socratic_response(
+                messages=st.session_state.messages,
+                custom_prompt=st.session_state.freestyle_prompt,
+                focus_mode=st.session_state.freestyle_focus
+            )
+        else:
+            generator = stream_socratic_response(
+                messages=st.session_state.messages,
+                sub_topic=st.session_state.active_subtopic,
+                node_id=st.session_state.active_node_id or ""
+            )
+
+        with st.chat_message("assistant"):
+            full_stream = st.write_stream(generator)
 
         st.session_state.messages.append({"role": "tutor", "content": full_stream, "style": "tutor-msg"})
         st.rerun()

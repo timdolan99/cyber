@@ -1,5 +1,5 @@
-import json
 import os
+import json
 import re
 import sys
 from pathlib import Path
@@ -258,7 +258,7 @@ def get_or_create_cag_cache() -> types.CachedContent:
     {combined_syllabus_text}
     
     PEDAGOGICAL DIRECTIVE:
-    Target adult cybersecurity professionals. Demand exact technical precision in terminology (e.g., distinguishing WAF from Stateful Firewall, or Encryption from Hashing). Maintain an uncapped Socratic interaction until the student accurately proves mastery. Keep questions concise (1-2 sentences).
+    Target adult cybersecurity professionals. Demand exact technical precision in terminology (e.g., distinguishing WAF from Stateful Firewall, or Encryption from Hashing). Maintain an uncapped Socratic interaction until the student accurately proves mastery. Keep questions concise and rigorous.
     """
 
     _CAG_CACHE_HANDLE = client.caches.create(
@@ -298,27 +298,43 @@ def convert_messages_to_contents(messages: list) -> list:
 
 # --- High-Speed Uncapped Socratic Engine Streaming ---
 def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
-    """Streams Socratic response tokens directly using Gemini 3.8 Flash CAG cache with minimal latency."""
     cache = get_or_create_cag_cache()
     node = get_node_by_id(node_id)
+    kt, ac = ", ".join(node.get("key_terms", [])), ", ".join(node.get("required_acronyms", []))
+    directive = (
+        f"Directive for {sub_topic}. Key Terms: {kt}. Acronyms: {ac}. "
+        f"MANDATORY: Wrap every instance of these key terms/acronyms in markdown bold (e.g., **AUP**, **ACL**). "
+        f"Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge. Complete all sentences."
+    )
+    config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.3, max_output_tokens=1000)
+    contents = [types.Content(role="user", parts=[types.Part.from_text(text=directive)])] + convert_messages_to_contents(messages)
+    for chunk in client.models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config):
+        if chunk.text: yield chunk.text
 
-    key_terms = ", ".join(node.get("key_terms", []))
-    required_acronyms = ", ".join(node.get("required_acronyms", []))
 
-    directive = f"""[SYSTEM DIRECTIVE]
-Target Sub-Objective: {sub_topic}
-Required Acronyms: {required_acronyms}
-Key Terms: {key_terms}
 
-UNCAPPED SOCRATIC MANDATE:
-1. Guide candidate using short, targeted probing follow-up questions.
-2. Never give away full answers directly. Demand exact controls (e.g., 'AES-256' vs 'encryption').
-3. Keep responses concise (2-3 sentences max) to minimize latency and maintain back-and-forth momentum.
-"""
+# --- Freestyle Practice Mode Helpers ---
+def stream_freestyle_socratic_response(
+    messages: list, 
+    custom_prompt: str, 
+    focus_mode: str
+) -> Generator[str, None, None]:
+    """Streams Socratic guidance for unscripted freestyle practice with full token headroom."""
+    cache = get_or_create_cag_cache()
+
+    directive = (
+        f"[EXAMINER DIRECTIVE - FREESTYLE SOCRATIC MODE]\n"
+        f"Unscripted Practice Prompt: \"{custom_prompt}\"\n"
+        f"Focus: {focus_mode}\n\n"
+        f"Provide substantive, analytical feedback (3-4 sentences) evaluating the candidate's custom scenario response, "
+        f"challenging inaccuracies, and concluding with a sharp probing question without giving away the answer. "
+        f"Complete all sentences fully."
+    )
 
     config = types.GenerateContentConfig(
         cached_content=cache.name,
-        temperature=0.2
+        temperature=0.3,
+        max_output_tokens=1000
     )
 
     contents = convert_messages_to_contents(messages)
@@ -366,44 +382,6 @@ def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
         return json.loads(clean_json)
     except Exception:
         return {"is_aligned": True, "reasoning": "Bypassed filter verification.", "suggested_pivot": ""}
-
-
-def stream_freestyle_socratic_response(
-    messages: list, 
-    custom_prompt: str, 
-    focus_mode: str
-) -> Generator[str, None, None]:
-    """Streams Socratic guidance for unscripted freestyle practice using CAG pre-loaded syllabus context."""
-    cache = get_or_create_cag_cache()
-
-    directive = f"""[SYSTEM DIRECTIVE]
-Unscripted Practice Prompt: "{custom_prompt}"
-Focus: {focus_mode}
-
-Guidelines:
-1. Do NOT give direct full answers. Ask targeted Socratic probing questions.
-2. Praise accurate technical vocabulary.
-3. Keep questions concise (1-2 sentences maximum).
-"""
-
-    config = types.GenerateContentConfig(
-        cached_content=cache.name,
-        temperature=0.2
-    )
-
-    contents = convert_messages_to_contents(messages)
-    contents.insert(0, types.Content(role="user", parts=[types.Part.from_text(text=directive)]))
-
-    response_stream = client.models.generate_content_stream(
-        model=MODEL_NAME,
-        contents=contents,
-        config=config
-    )
-
-    for chunk in response_stream:
-        if chunk.text:
-            yield chunk.text
-
 
 # --- Response Refactor Feature ---
 def generate_refactor_challenge(node_id: str) -> Dict[str, str]:
