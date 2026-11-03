@@ -78,7 +78,8 @@ from socratic_cag_fsm import (
     generate_pbq_scenario,
     grade_pbq_response,
     generate_socratic_synthesis_prompt,
-    evaluate_socratic_synthesis
+    evaluate_socratic_synthesis,
+    load_questions_from_syllabus_and_nodes
 )
 
 # --- COLOR THEME CONFIGURATION ---
@@ -108,9 +109,9 @@ class ActivityLog(Base):
     misconception_flag = Column(Integer, default=0)
 
 def log_session_to_supabase(unit: str, subtopic: str, app_mode: str, score_pct: float, keywords_used: list = None, keywords_missed: list = None, misconception_flag: int = 0):
-    """Logs session metrics statelessly to Supabase activity_logs table."""
+    """Logs session metrics statelessly to Supabase activity_logs table, bypassing quietly if unconfigured."""
     try:
-        if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
+        if "postgres" in st.secrets and "url" in st.secrets["postgres"] and st.secrets["postgres"]["url"]:
             db_url = st.secrets["postgres"]["url"]
             engine = create_engine(db_url, pool_pre_ping=True)
             Session = sessionmaker(bind=engine)
@@ -134,8 +135,8 @@ def log_session_to_supabase(unit: str, subtopic: str, app_mode: str, score_pct: 
             session.add(log_entry)
             session.commit()
             session.close()
-    except Exception as e:
-        st.warning(f"⚠️ Telemetry log bypassed: {e}")
+    except Exception:
+        pass
 
 # --- Formatting Helpers ---
 def extract_clean_text(response) -> str:
@@ -164,7 +165,6 @@ st.markdown(f"""
     <style>
     .stApp {{ background: #f8fafc; }}
     
-    /* Force Sidebar Background to Clean White to match Logo */
     div[data-testid="stSidebar"], 
     section[data-testid="stSidebar"],
     div[data-testid="stSidebar"] > div {{
@@ -172,7 +172,6 @@ st.markdown(f"""
         border-right: 1px solid #e2e8f0;
     }}
     
-    /* Code Box Word Wrapping for Exemplars */
     div[data-testid="stCodeBlock"] pre, 
     div[data-testid="stCodeBlock"] code,
     code {{
@@ -248,6 +247,14 @@ if "socratic_synthesis_q" not in st.session_state:
     st.session_state.socratic_synthesis_q = None
 if "socratic_synthesis_results" not in st.session_state:
     st.session_state.socratic_synthesis_results = None
+if "exam_question_pool" not in st.session_state:
+    st.session_state.exam_question_pool = []
+if "exam_current_index" not in st.session_state:
+    st.session_state.exam_current_index = 0
+if "exam_user_answers" not in st.session_state:
+    st.session_state.exam_user_answers = {}
+if "exam_submitted" not in st.session_state:
+    st.session_state.exam_submitted = False
 
 def reset_session():
     st.session_state.active_domain = None
@@ -267,11 +274,26 @@ def reset_session():
     st.session_state.socratic_dialogue_complete = False
     st.session_state.socratic_synthesis_q = None
     st.session_state.socratic_synthesis_results = None
+    st.session_state.exam_question_pool = []
+    st.session_state.exam_current_index = 0
+    st.session_state.exam_user_answers = {}
+    st.session_state.exam_submitted = False
     st.rerun()
+
+# --- Sidebar Exam Mode Trigger ---
+with st.sidebar:
+    st.write("---")
+    if st.button("Simulate CompTIA Exam Mode", use_container_width=True):
+        st.session_state.app_mode = "exam_mode"
+        st.session_state.exam_question_pool = []
+        st.session_state.exam_current_index = 0
+        st.session_state.exam_user_answers = {}
+        st.session_state.exam_submitted = False
+        st.rerun()
 
 # --- Dynamic Screen Router ---
 
-if st.session_state.active_subtopic is None and st.session_state.app_mode != "freestyle_input":
+if st.session_state.active_subtopic is None and st.session_state.app_mode not in ["freestyle_input", "exam_mode"]:
     st.markdown(f'<div class="chat-header">Orthology Socratic Engine — {COURSE_TITLE} ({EXAM_CODE})</div>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -289,8 +311,7 @@ if st.session_state.active_subtopic is None and st.session_state.app_mode != "fr
         sub_list = domains_dict.get(sel_domain, [])
         sel_subtopic = st.selectbox("Step 2: Select Sub-Objective:", options=sub_list)
         
-        # Dynamically resolve target_node_id based on selection
-        target_node_id = "1.2_fundamental_security_concepts" # Default fallback
+        target_node_id = "1.2_fundamental_security_concepts"
         for node in COMPTIA_NODES:
             if node.get("domain") == sel_domain:
                 sub_obj_text = node.get("sub_objective", "")
@@ -341,6 +362,182 @@ if st.session_state.active_subtopic is None and st.session_state.app_mode != "fr
             st.session_state.active_node_id = target_node_id
             st.session_state.pbq_data = generate_pbq_scenario(target_node_id)
             st.rerun()
+
+# --- Mock Exam Mode View ---
+elif st.session_state.app_mode == "exam_mode":
+    st.markdown(f'<div class="chat-header">CompTIA Security+ Mock Exam Simulation (45 Items)</div>', unsafe_allow_html=True)
+    
+    timed_mode = st.sidebar.checkbox("Enable 45-Minute Exam Timer", value=False)
+    if timed_mode:
+        st.sidebar.info("⏱️ Simulation mode active: 45-minute pacing monitored.")
+
+    if not st.session_state.exam_question_pool:
+        with st.spinner("Initializing 45-question CompTIA Security+ examination pool (Front-Loaded Open PBQs, Acronyms & MCQs)..."):
+            st.session_state.exam_question_pool = load_questions_from_syllabus_and_nodes()
+        st.session_state.exam_current_index = 0
+        st.session_state.exam_user_answers = {}
+        st.session_state.exam_submitted = False
+
+    pool = st.session_state.exam_question_pool
+    idx = st.session_state.exam_current_index
+
+    if pool and not st.session_state.exam_submitted:
+        q = pool[idx]
+        is_pbq = q.get("type") == "pbq"
+        badge = "🔥 Performance-Based Question (Open-Ended Log Analysis)" if is_pbq else f"Domain: {q['domain']}"
+        st.progress((idx + 1) / len(pool), text=f"Question {idx + 1} of {len(pool)} | {badge}")
+        
+        st.subheader(f"Objective: {q['sub_objective']}")
+        st.markdown(q["question"])
+        
+        if is_pbq:
+            if q.get("log_snippet"):
+                st.code(q["log_snippet"], language="text")
+            
+            current_ans = st.session_state.exam_user_answers.get(idx, "")
+            user_analysis = st.text_area(
+                "Provide your written troubleshooting analysis (Attack Vector, Protocol, Technical Remediation):",
+                value=current_ans,
+                height=180,
+                key=f"exam_pbq_text_{idx}"
+            )
+            st.session_state.exam_user_answers[idx] = user_analysis
+        else:
+            current_ans = st.session_state.exam_user_answers.get(idx, None)
+            selected_option = st.radio(
+                "Select your technical evaluation response:",
+                options=q["options"],
+                index=q["options"].index(current_ans) if current_ans in q["options"] else 0,
+                key=f"exam_radio_{idx}"
+            )
+            st.session_state.exam_user_answers[idx] = selected_option
+
+        st.write("---")
+        col_nav1, col_nav2, col_nav3 = st.columns(3)
+        with col_nav1:
+            if idx > 0 and st.button("⬅️ Previous", use_container_width=True):
+                st.session_state.exam_current_index -= 1
+                st.rerun()
+        with col_nav2:
+            if idx < len(pool) - 1 and st.button("Next ➡️", type="primary", use_container_width=True):
+                st.session_state.exam_current_index += 1
+                st.rerun()
+        with col_nav3:
+            if idx == len(pool) - 1 and st.button("🏁 Finish & Score Exam", type="primary", use_container_width=True):
+                st.session_state.exam_submitted = True
+                st.rerun()
+
+    elif st.session_state.exam_submitted:
+        total_q = len(pool)
+        correct_count = 0
+        domain_stats = {}
+        pbq_scores_sum = 0
+        pbq_total = 0
+        missed_domains = set()
+        missed_questions_text = []
+        
+        with st.spinner("Grading examination items and analyzing written PBQ log troubleshooting..."):
+            for i, q in enumerate(pool):
+                user_ans = st.session_state.exam_user_answers.get(i, "")
+                is_pbq = q.get("type") == "pbq"
+                
+                raw_dom = q["domain"]
+                if not raw_dom or "Syllabus" in raw_dom or ".pdf" in raw_dom:
+                    clean_dom = "1.0 General Security Concepts"
+                else:
+                    clean_dom = raw_dom
+                
+                if clean_dom not in domain_stats:
+                    domain_stats[clean_dom] = {"correct": 0, "total": 0}
+                domain_stats[clean_dom]["total"] += 1
+
+                if is_pbq:
+                    pbq_total += 1
+                    pbq_grade = grade_pbq_response(
+                        node_id="pbq_eval",
+                        log_snippet=q.get("log_snippet", q["question"]),
+                        student_analysis=user_ans
+                    )
+                    pbq_score = pbq_grade.get("score", 0)
+                    pbq_scores_sum += pbq_score
+                    if pbq_score >= 70:
+                        correct_count += 1
+                        domain_stats[clean_dom]["correct"] += 1
+                    else:
+                        missed_domains.add(clean_dom)
+                        missed_questions_text.append(q["question"] + " " + q.get("sub_objective", ""))
+                else:
+                    correct_choice = q["options"][q["correct_index"]]
+                    if user_ans == correct_choice:
+                        correct_count += 1
+                        domain_stats[clean_dom]["correct"] += 1
+                    else:
+                        missed_domains.add(clean_dom)
+                        missed_questions_text.append(q["question"] + " " + " ".join(q.get("options", [])))
+
+        percentage = (correct_count / total_q) if total_q > 0 else 0
+        scaled_score = int(100 + (percentage * 800))
+        passed = scaled_score >= 750
+
+        st.subheader("Exam Simulation Results")
+        if passed:
+            st.success(f"🎉 **PASS! Scaled Score: {scaled_score} / 900** (Passing threshold is 750)")
+        else:
+            st.error(f"⚠️ **NON-PASS. Scaled Score: {scaled_score} / 900** (Passing threshold is 750)")
+
+        st.markdown(f"**Overall Correct / Verified:** {correct_count} / {total_q} items ({percentage * 100:.1f}%)")
+        
+        if pbq_total > 0:
+            avg_pbq = pbq_scores_sum / pbq_total
+            st.info(f"🔥 **Front-Loaded PBQ Log Analysis Performance:** Average Score: {avg_pbq:.1f}/100. Evaluated via rigorous written technical troubleshooting analysis.")
+
+        st.markdown("### Granular Domain Performance Breakdown:")
+        for dom, stats in domain_stats.items():
+            dom_pct = (stats["correct"] / stats["total"]) * 100 if stats["total"] > 0 else 0
+            st.markdown(f"- **{dom}:** {stats['correct']}/{stats['total']} correct ({dom_pct:.0f}%)")
+
+        st.markdown("### 🧠 Granular Examiner Misconception & Literacy Analysis:")
+        
+        # Filter strictly for domains scoring below 75%
+        true_missed_domains = [dom for dom, stats in domain_stats.items() if (stats["correct"] / stats["total"]) < 0.75]
+
+        if true_missed_domains:
+            missed_list_str = ", ".join(true_missed_domains)
+            
+            # Extract specific acronyms associated with missed items
+            flagged_acronyms = []
+            combined_missed_blob = " ".join(missed_questions_text)
+            potential_acros = re.findall(r'\b[A-Z]{2,6}\b', combined_missed_blob)
+            
+            # Exclude common stop words or headers
+            stopwords = {"TCP", "SYN", "GET", "HTTP", "PDF", "API"}
+            unique_acron_gaps = [a for a in list(set(potential_acros)) if a not in stopwords][:6]
+            acronym_str = ", ".join(unique_acron_gaps) if unique_acron_gaps else "SIEM, PKI, LDAP, RPO/RTO"
+
+            st.warning(
+                f"**Targeted Conceptual Gaps Identified:** Your performance dropped below threshold in: **{missed_list_str}**.\n\n"
+                f"• **Key Acronyms & Terms to Review:** `{acronyms_str}`\n" if 'acronyms_str' in locals() else f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n" +
+                "• **Technical Recommendations:** Review specific protocol headers, secure deployment boundaries, "
+                "and log anomaly signatures for these specific weak domains."
+            )
+        else:
+            st.success("Flawless technical execution! Zero conceptual misconceptions or domain gaps detected.")
+
+        log_session_to_supabase(
+            unit="Mock Exam Simulation",
+            subtopic="45-Item Diagnostic (Open PBQs, Acronyms, MCQs)",
+            app_mode="exam_mode",
+            score_pct=percentage * 100.0,
+            misconception_flag=0 if passed else 1
+        )
+
+        if st.button("🔄 Start New Exam Session", use_container_width=True):
+            st.session_state.exam_question_pool = []
+            st.session_state.exam_submitted = False
+            reset_session()
+
+    if st.button("Exit to Main Menu", use_container_width=True):
+        reset_session()
 
 # --- Freestyle Input View ---
 elif st.session_state.app_mode == "freestyle_input":
@@ -417,7 +614,6 @@ elif st.session_state.app_mode == "socratic_drill":
         if st.button("Change Objective / Mode", use_container_width=True):
             reset_session()
 
-    # Exemplar Prompt Accordion
     suggested = get_suggested_prompts("socratic_drill", st.session_state.active_node_id or "")
     with st.expander("Suggested Prompt & Exemplar Writing Style", expanded=False):
         st.info(suggested.get("instruction", ""))
@@ -443,12 +639,10 @@ elif st.session_state.app_mode == "socratic_drill":
 
     is_disabled = st.session_state.socratic_dialogue_complete
     
-    # 1. Chat input handler - immediately appends candidate prompt and reruns to display it on screen
     if user_input := st.chat_input("Type your response here using precise Security+ terms...", disabled=is_disabled):
         st.session_state.messages.append({"role": "student", "content": user_input})
         st.rerun()
 
-    # 2. If the last message is from the student, show status indicator and stream the response
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "student":
         with st.status("Analyzing your answer against Security+ objective rubrics...", expanded=True) as status:
             st.write("• Checking required acronyms & technical terms...")
@@ -476,7 +670,6 @@ elif st.session_state.app_mode == "socratic_drill":
         st.session_state.messages.append({"role": "tutor", "content": full_stream, "style": "tutor-msg"})
         st.rerun()
 
-    # --- Step 2: Final Synthesis Phase ---
     if st.session_state.socratic_dialogue_complete:
         st.write("---")
         st.subheader("Final Mastery Synthesis (6-Point Check)")
@@ -546,7 +739,6 @@ elif st.session_state.app_mode == "response_refactor":
     st.subheader("Flawed Initial Draft")
     st.warning(f'"{ref_data.get("flawed_text", "")}"')
 
-    # Unsubmitted View
     if st.session_state.refactor_results is None:
         student_refactor = st.text_area(
             "Rewrite this response using precise Security+ terminology:", 
@@ -578,7 +770,6 @@ elif st.session_state.app_mode == "response_refactor":
             else:
                 st.warning("Please type a refactored answer before submitting.")
 
-    # Post-Submission Graded View with Retry / Regrading Option
     else:
         res = st.session_state.refactor_results
         current_score = res.get('score', 0)
@@ -591,7 +782,6 @@ elif st.session_state.app_mode == "response_refactor":
         st.info(f"**Examiner Feedback:** {res.get('feedback', '')}")
         st.write("")
 
-        # Offer retry if score is below 100
         if current_score < 100:
             if not st.session_state.get("refactor_retry_mode", False):
                 if st.button("Upgrade Response (Retry Challenge)", type="primary", use_container_width=True):

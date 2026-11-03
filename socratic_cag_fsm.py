@@ -85,6 +85,9 @@ MODEL_NAME = "gemini-3.8-flash"
 # Global Cache Handle for Server-Side KV Caching
 _CAG_CACHE_HANDLE = None
 
+# Module-level memory cache for exam pool generation efficiency
+_CACHED_EXAM_POOL = None
+
 
 class ChatState(TypedDict, total=False):
     messages: List[BaseMessage]
@@ -104,9 +107,9 @@ def get_node_by_id(node_id: str) -> Dict[str, Any]:
     return {}
 
 
-# --- Fast Local Terminology Pre-Checker ---
+# --- Fast Local Terminology Pre-Checker (<10ms Execution) ---
 def check_terms_locally(user_input: str, node_id: str) -> Dict[str, Any]:
-    """Evaluates candidate response locally in <10ms against node metadata."""
+    """Evaluates candidate response locally in <10ms against node metadata without API calls."""
     node = get_node_by_id(node_id)
     if not node:
         return {"matched_terms": [], "matched_acronyms": [], "coverage_pct": 0.0}
@@ -504,6 +507,87 @@ def grade_pbq_response(node_id: str, log_snippet: str, student_analysis: str) ->
     
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
     return json.loads(clean_text)
+
+
+# --- Fully Dynamic 45-Question Exam Pool Generator (Granular Domains & Open-Ended PBQs) ---
+def load_questions_from_syllabus_and_nodes() -> list:
+    """Generates and memoizes a balanced 45-question exam pool: 2 open-ended PBQs, 10 acronyms/definitions, 33 MCQs."""
+    global _CACHED_EXAM_POOL
+    if _CACHED_EXAM_POOL is not None:
+        return _CACHED_EXAM_POOL
+
+    pool = []
+    
+    try:
+        cache = get_or_create_cag_cache()
+        prompt = f"""
+        You are an expert CompTIA Security+ ({EXAM_CODE}) senior certification examiner.
+        Generate a comprehensive, precisely balanced set of 45 mock exam items.
+        
+        The 45 items MUST strictly follow this distribution:
+        - Exactly 2 Front-Loaded Performance-Based Questions (PBQs) (Type: 'pbq'). Each PBQ must include a realistic raw log snippet or technical incident description (`log_snippet`) and an open-ended troubleshooting prompt.
+        - 10 Dedicated Acronym and Definition Identification Questions (Type: 'mcq') focusing on terms like SIEM, HSM, LDAP, PKI, RPO/RTO.
+        - 33 Core Domain Multiple-Choice Questions (MCQs) distributed evenly across official CompTIA Security+ domains:
+          - Domain 1.0: General Security Concepts
+          - Domain 2.0: Threats, Vulnerabilities & Mitigations
+          - Domain 3.0: Security Architecture
+          - Domain 4.0: Security Operations
+          - Domain 5.0: Governance, Risk & Compliance
+
+        Return ONLY a valid JSON list of objects with this exact structure:
+        [
+          {{
+            "type": "mcq" or "pbq",
+            "domain": "1.0 General Security Concepts" (Must start with official prefix 1.0, 2.0, 3.0, 4.0, or 5.0),
+            "sub_objective": "Specific sub-objective description",
+            "question": "The question or troubleshooting prompt text...",
+            "log_snippet": "RAW LOG OR CONFIG PAYLOAD (Only required if type is 'pbq', otherwise omit)",
+            "options": ["Option A", "Option B", "Option C", "Option D"] (Only required if type is 'mcq'),
+            "correct_index": 0 (Only required if type is 'mcq')
+          }}
+        ]
+        """
+        config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.3)
+        response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
+        clean_json = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
+        generated_items = json.loads(clean_json)
+        if isinstance(generated_items, list):
+            pool.extend(generated_items)
+    except Exception as e:
+        print(f"Error generating dynamic questions: {e}")
+
+    # Fallback if empty
+    if not pool:
+        pool.append({
+            "type": "pbq",
+            "domain": "4.0 Security Operations",
+            "sub_objective": "Log Analysis & Incident Response",
+            "question": "Analyze the log snippet below, identify the attack vector, and detail technical remediation.",
+            "log_snippet": "LOG_ALERT: 192.168.1.50 -> 10.0.0.15 TCP 3389 [SYN-Flood/Brute-Force]",
+        })
+        pool.append({
+            "type": "pbq",
+            "domain": "2.0 Threats, Vulnerabilities & Mitigations",
+            "sub_objective": "Application Vulnerability Analysis",
+            "question": "Analyze the following web server log snippet for suspicious API endpoint parameter tampering.",
+            "log_snippet": "GET /api/v1/users?id=OR 1=1 HTTP/1.1 -- Status: 200 OK (Data Dump)",
+        })
+        for node in COMPTIA_NODES[:43]:
+            sub_obj = node.get("sub_objective", "Security Objective")
+            pool.append({
+                "type": "mcq",
+                "domain": node.get("domain", "1.0 General Security Concepts"),
+                "sub_objective": sub_obj,
+                "question": f"Regarding **{sub_obj}**, which technical implementation applies official guidelines?",
+                "options": ["Enforcing strict cryptographic controls", "Disabling audit logging", "Using legacy protocols", "Permitting implicit trust"],
+                "correct_index": 0
+            })
+
+    # Ensure PBQs are strictly front-loaded, and cap the pool at exactly 45 items
+    pbqs = [q for q in pool if q.get("type") == "pbq"]
+    others = [q for q in pool if q.get("type") != "pbq"]
+    _CACHED_EXAM_POOL = (pbqs + others)[:45]
+    return _CACHED_EXAM_POOL
 
 
 # --- LangGraph Socratic FSM Graph ---
