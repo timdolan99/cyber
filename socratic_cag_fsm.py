@@ -296,21 +296,35 @@ def convert_messages_to_contents(messages: list) -> list:
     return contents
 
 
-# --- High-Speed Uncapped Socratic Engine Streaming ---
+# --- High-Speed Uncapped Socratic Engine Streaming (Anti-Cutoff Enhanced) ---
 def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
     cache = get_or_create_cag_cache()
     node = get_node_by_id(node_id)
     kt, ac = ", ".join(node.get("key_terms", [])), ", ".join(node.get("required_acronyms", []))
+    
     directive = (
-        f"Directive for {sub_topic}. Key Terms: {kt}. Acronyms: {ac}. "
-        f"MANDATORY: Wrap every instance of these key terms/acronyms in markdown bold (e.g., **AUP**, **ACL**). "
-        f"Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge. Complete all sentences."
+        f"[ACTIVE SOCRATIC DRILL DIRECTIVE - MULTI-TURN PERSISTENCE]\n"
+        f"Target Revision Objective: {sub_topic}\n"
+        f"Required Key Terms: {kt}\n"
+        f"Required Acronyms: {ac}\n\n"
+        f"MANDATORY BEHAVIORAL RULES:\n"
+        f"1. This is an ongoing, deep Socratic dialogue. DO NOT conclude the session, DO NOT say 'dialogue complete', and DO NOT provide final grading or summary yet.\n"
+        f"2. Keep the Socratic pressure active. Probe deeper into operational mechanics, edge cases, or failure modes rather than wrapping up prematurely.\n"
+        f"3. MANDATORY: Wrap every instance of these key terms/acronyms in markdown bold (e.g., **AUP**, **ACL**).\n"
+        f"4. Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge question. Complete all sentences."
     )
-    config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.3, max_output_tokens=1000)
+    
+    config = types.GenerateContentConfig(
+        cached_content=cache.name, 
+        temperature=0.3, 
+        max_output_tokens=1000
+    )
+    
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=directive)])] + convert_messages_to_contents(messages)
+    
     for chunk in client.models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config):
-        if chunk.text: yield chunk.text
-
+        if chunk.text: 
+            yield chunk.text
 
 
 # --- Freestyle Practice Mode Helpers ---
@@ -351,9 +365,9 @@ def stream_freestyle_socratic_response(
             yield chunk.text
 
 
-# --- Freestyle Practice Mode Helpers ---
 def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
     """Verifies whether a user-entered freestyle prompt aligns with CompTIA Security+ / Cybersecurity."""
+    cache = get_or_create_cag_cache()
     system_prompt = f"""
     You are an AI curriculum alignment filter for {COURSE_TITLE} ({EXAM_CODE}).
     Analyze the user input and determine if it falls within the scope of cybersecurity, enterprise architecture, threats, or security operations.
@@ -366,13 +380,17 @@ def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
     }}
     """
     config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
+        cached_content=cache.name,
         temperature=0.0
     )
 
+    contents = [
+        types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)]),
+        types.Content(role="user", parts=[types.Part.from_text(text=custom_prompt)])
+    ]
     response = client.models.generate_content(
         model=MODEL_NAME,
-        contents=custom_prompt,
+        contents=contents,
         config=config
     )
     
@@ -382,6 +400,7 @@ def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
         return json.loads(clean_json)
     except Exception:
         return {"is_aligned": True, "reasoning": "Bypassed filter verification.", "suggested_pivot": ""}
+
 
 # --- Response Refactor Feature ---
 def generate_refactor_challenge(node_id: str) -> Dict[str, str]:
