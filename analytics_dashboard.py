@@ -191,12 +191,12 @@ def render_analytics_dashboard():
         digit_html = "".join([f'<span style="background: #000000; color: #ffffff; padding: 2px 4px; margin: 0 1px; border-radius: 3px; border: 1px solid #334155; font-family: monospace; font-size: 1.0em; box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);">{d}</span>' for d in formatted_str])
 
         st.markdown(f"""
-            <div style="font-size: 2.2rem; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 2px; text-align: center;">Total Milometer Sessions</div>
+            <div style="font-size: 2.2rem; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 2px; text-align: center;">Total Sessions</div>
             <div style="background: #0f172a; border: 1px solid #1e293b; padding: 4px; border-radius: 6px; margin-bottom: 8px; height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                 <div style="text-align: center; line-height: 1; display: flex; justify-content: center;">{digit_html}</div>
             </div>
             
-            <div style="font-size: 2.2rem; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 2px; text-align: center;">Overall Cumulative Score</div>
+            <div style="font-size: 2.2rem; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 2px; text-align: center;">Cumulative Score</div>
             <div style="background: {score_bg}; border: 1px solid rgba(0,0,0,0.1); color: white; padding: 4px; border-radius: 6px; height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                 <div style="font-size: 1.4em; font-weight: 700; font-family: monospace; text-align: center; line-height: 1.1;">{overall_avg:.1f}%</div>
             </div>
