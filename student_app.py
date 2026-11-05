@@ -6,6 +6,7 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
+from analytics_dashboard import render_analytics_dashboard
 
 # --- Orthology Branding Setup ---
 LOGO_PATH = "ortho_logo.png"
@@ -92,7 +93,7 @@ THEME_BANNER_TEXT = "#166534"     # Dark Green Banner Text
 Base = declarative_base()
 
 class ActivityLog(Base):
-    __tablename__ = "activity_logs"
+    __tablename__ = "activity_logs_comptia_csp"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
@@ -107,34 +108,34 @@ class ActivityLog(Base):
     misconception_flag = Column(Integer, default=0)
 
 def log_session_to_supabase(unit: str, subtopic: str, app_mode: str, score_pct: float, keywords_used: list = None, keywords_missed: list = None, misconception_flag: int = 0):
-    """Logs session metrics statelessly to Supabase activity_logs table, bypassing quietly if unconfigured."""
+    """Logs session metrics statelessly to Supabase activity_logs_comptia_csp table."""
     try:
-        if "postgres" in st.secrets and "url" in st.secrets["postgres"] and st.secrets["postgres"]["url"]:
-            db_url = st.secrets["postgres"]["url"]
-            engine = create_engine(db_url, pool_pre_ping=True)
-            Session = sessionmaker(bind=engine)
-            session = Session()
+        db_url = st.secrets["postgres"]["url"]
+        engine = create_engine(db_url, pool_pre_ping=True)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
-            kw_used_str = ", ".join([str(k) for k in keywords_used if k]) if keywords_used else None
-            kw_missed_str = ", ".join([str(k) for k in keywords_missed if k]) if keywords_missed else None
+        kw_used_str = ", ".join([str(k) for k in keywords_used if k]) if keywords_used else None
+        kw_missed_str = ", ".join([str(k) for k in keywords_missed if k]) if keywords_missed else None
 
-            log_entry = ActivityLog(
-                subject=f"{COURSE_TITLE} ({EXAM_CODE})",
-                level="Adult Professional",
-                unit=unit or "General Domain",
-                subtopic=subtopic or "General Objective",
-                app_mode=app_mode,
-                score_pct=round(float(score_pct), 1),
-                keywords_used=kw_used_str,
-                keywords_missed=kw_missed_str,
-                misconception_flag=int(misconception_flag)
-            )
+        log_entry = ActivityLog(
+            subject=f"{COURSE_TITLE} ({EXAM_CODE})",
+            level="Adult Professional",
+            unit=unit or "General Domain",
+            subtopic=subtopic or "General Objective",
+            app_mode=app_mode,
+            score_pct=round(float(score_pct), 1),
+            keywords_used=kw_used_str,
+            keywords_missed=kw_missed_str,
+            misconception_flag=int(misconception_flag)
+        )
 
-            session.add(log_entry)
-            session.commit()
-            session.close()
-    except Exception:
-        pass
+        session.add(log_entry)
+        session.commit()
+        session.close()
+    except Exception as e:
+        st.warning(f"⚠️ Telemetry log failed: {e}")
+        
 
 # --- Formatting Helpers ---
 def extract_clean_text(response) -> str:
@@ -162,14 +163,12 @@ def md_to_html(text: str) -> str:
 st.markdown(f"""
     <style>
     .stApp {{ background: #f8fafc; }}
-    
     div[data-testid="stSidebar"], 
     section[data-testid="stSidebar"],
     div[data-testid="stSidebar"] > div {{
         background-color: #ffffff !important;
         border-right: 1px solid #e2e8f0;
     }}
-    
     div[data-testid="stCodeBlock"] pre, 
     div[data-testid="stCodeBlock"] code,
     code {{
@@ -177,10 +176,8 @@ st.markdown(f"""
         word-break: break-word !important;
         overflow-x: auto !important;
     }}
-
     div[data-testid="stProgress"] > div > div > div {{ background-color: {THEME_PRIMARY} !important; }}
     h1, h2, h3 {{ color: #0f172a; font-family: 'Inter', sans-serif; font-weight: 700; }}
-    
     .chat-header {{ 
         background: linear-gradient(135deg, {THEME_GRADIENT_START} 0%, {THEME_GRADIENT_END} 100%); 
         color: white; padding: 22px; font-weight: 700; text-align: center; 
@@ -224,7 +221,7 @@ if "freestyle_prompt" not in st.session_state:
 if "freestyle_focus" not in st.session_state:
     st.session_state.freestyle_focus = "Technical Architecture & Implementation"
 if "app_mode" not in st.session_state:
-    st.session_state.app_mode = None
+    st.session_state.app_mode = "home"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "refactor_data" not in st.session_state:
@@ -261,7 +258,7 @@ def reset_session():
     st.session_state.is_freestyle = False
     st.session_state.freestyle_prompt = ""
     st.session_state.freestyle_focus = "Technical Architecture & Implementation"
-    st.session_state.app_mode = None
+    st.session_state.app_mode = "home"
     st.session_state.messages = []
     st.session_state.refactor_data = None
     st.session_state.refactor_results = None
@@ -278,9 +275,13 @@ def reset_session():
     st.session_state.exam_submitted = False
     st.rerun()
 
-# --- Sidebar Exam Mode & Progress Tracker Trigger ---
+# --- Sidebar Exam Mode & Overview Trigger ---
 with st.sidebar:
     st.write("---")
+    if st.button("📖 Course & App Overview", use_container_width=True):
+        st.session_state.app_mode = "overview"
+        st.rerun()
+
     if st.button("Simulate CompTIA Exam Mode", use_container_width=True):
         st.session_state.app_mode = "exam_mode"
         st.session_state.exam_question_pool = []
@@ -293,83 +294,55 @@ with st.sidebar:
         reset_session()
 
     st.write("---")
-    st.subheader("Progress Tracker")
-    if st.button("Open Progress Tracker", use_container_width=True):
-        st.info("📊 **Progress Tracker:** This dashboard is coming soon. Stay tuned!")
+    st.subheader("Analytics Dashboard")
+    if st.button("Open Dashboard", use_container_width=True):
+        st.session_state.app_mode = "analytics"
+        st.rerun()
 
 # --- Dynamic Screen Router ---
 
-if st.session_state.active_subtopic is None and st.session_state.app_mode not in ["freestyle_input", "exam_mode"]:
-    st.markdown(f'<div class="chat-header">Orthology Socratic Engine — {COURSE_TITLE} ({EXAM_CODE})</div>', unsafe_allow_html=True)
+if st.session_state.app_mode == "overview":
+    st.markdown(f'<div class="chat-header">CompTIA Security+ (SY0-701) & App Guide</div>', unsafe_allow_html=True)
     
+    st.markdown("### **Course & Domain Content**")
+    st.write("CompTIA Security+ (SY0-701) is one of the most popular and widely recognized entry-to-intermediate cybersecurity certifications in the world. Trusted by millions of IT professionals, government agencies, and global enterprises, it establishes the baseline knowledge required for a successful career in security. The curriculum covers five core cybersecurity domains:")
     st.markdown("""
-        <div class="purpose-banner">
-            <b>Uncapped Socratic Assessment:</b> This engine tests technical precision, mandatory acronym usage, 
-            and architectural reasoning for CompTIA Security+. Select a domain objective or launch a freestyle scenario to begin.
-        </div>
-    """, unsafe_allow_html=True)
+    * **1.0 General Security Concepts:** Core security controls, fundamental principles like the CIA triad, zero trust architecture, and change management.
+    * **2.0 Threats, Vulnerabilities & Mitigations:** Threat actor types, common attack vectors, vulnerability scanning, and indicator-of-compromise analysis.
+    * **3.0 Security Architecture:** Enterprise network infrastructure, cloud security implementation, secure virtualization, and core cryptography.
+    * **4.0 Security Operations:** Identity and access management (IAM), endpoint security, SIEM/EDR log monitoring, and incident response.
+    * **5.0 Governance, Risk & Compliance (GRC):** Risk assessment strategies, privacy policies, physical security controls, and regulatory compliance frameworks.
+    """)
     
-    st.subheader("Select Objective Target")
+    st.markdown("---")
+    st.markdown("### **The CompTIA Security+ (SY0-701) Exam**")
+    st.markdown("""
+    * **Format & Duration:** The exam consists of a maximum of 90 questions to be completed within 90 minutes.
+    * **Scoring:** CompTIA uses a scaled scoring system from 100 to 900, with a required passing score of **750**. Because scores are dynamically scaled based on question difficulty, there is no fixed number of correct answers needed to pass. CompTIA does not publish official pass-rate statistics.
+    * **Task Types:** 
+      * **Multiple-Choice Questions (MCQs):** Standard single- and multiple-answer questions testing theoretical knowledge, definitions, and domain frameworks.
+      * **Performance-Based Questions (PBQs):** Practical, simulation-based tasks front-loaded at the start of the exam that require you to analyze raw logs, configure network settings, or troubleshoot live security incidents under pressure.
+    """)
     
-    domains_dict = COURSE_SPEC.get("domains", {})
-    if domains_dict:
-        sel_domain = st.selectbox("Step 1: Select Security+ Domain:", options=list(domains_dict.keys()))
-        sub_list = domains_dict.get(sel_domain, [])
-        sel_subtopic = st.selectbox("Step 2: Select Sub-Objective:", options=sub_list)
-        
-        target_node_id = "1.2_fundamental_security_concepts"
-        for node in COMPTIA_NODES:
-            if node.get("domain") == sel_domain:
-                sub_obj_text = node.get("sub_objective", "")
-                node_code = node.get("node_id", "").split("_")[0]
-                if sel_subtopic.startswith(node_code) or sel_subtopic in sub_obj_text:
-                    target_node_id = node.get("node_id")
-                    break
-    else:
-        sel_domain = "1.0 General Security Concepts"
-        sel_subtopic = "1.2 Summarize fundamental security concepts"
-        target_node_id = "1.2_fundamental_security_concepts"
-
+    st.markdown("---")
+    st.markdown("### **How This App Helps You Prepare**")
+    st.write("Instead of relying on passive reading or rote memorization, this application uses an **interactive Socratic tutoring model** to build genuine technical competence:")
+    st.markdown("""
+    * **Guided Socratic Drills:** Rather than giving you direct answers, the AI acts as an examiner—challenging your assumptions, checking for precise terminology and mandatory acronyms, and pushing you to think through operational edge cases across rigorous multi-turn dialogues.
+    * **Targeted Practice Modes:** You can test your skills through specialized workflows, including **Freestyle Scenario Practice**, **Response Refactoring** (where you correct flawed technical drafts), and **Text-Based PBQ Log Analysis** (evaluating raw log snippets and configurations).
+    * **Full Exam Simulation:** The app features a comprehensive mock exam mode that dynamically generates a balanced pool of 45 test items—including front-loaded text-based PBQs with raw log payloads, acronym identification questions, and core domain MCQs distributed evenly across all five CompTIA domains. 
+    * **Deep Mastery Scaffolding:** The system ensures you thoroughly defend your technical explanations across continuous exchanges before moving on to final synthesis, preparing you thoroughly for both written exam concepts and real-world operations.
+    """)
+    
     st.write("")
+    if st.button("Return to Main Menu", use_container_width=True):
+        reset_session()
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("Start Guided Socratic Drill", type="primary", use_container_width=True):
-            st.session_state.app_mode = "socratic_drill"
-            st.session_state.is_freestyle = False
-            st.session_state.active_domain = sel_domain
-            st.session_state.active_subtopic = sel_subtopic
-            st.session_state.active_node_id = target_node_id
-            st.rerun()
+elif st.session_state.app_mode == "analytics":
+    render_analytics_dashboard()
+    if st.button("Return to Main Menu", use_container_width=True):
+        reset_session()
 
-    with col_btn2:
-        if st.button("Start Freestyle Scenario Practice", type="primary", use_container_width=True):
-            st.session_state.app_mode = "freestyle_input"
-            st.rerun()
-
-    st.write("---")
-    st.subheader("Specialized Practice Modes")
-
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        if st.button("Refactor Flawed Response", use_container_width=True):
-            st.session_state.app_mode = "response_refactor"
-            st.session_state.active_domain = sel_domain
-            st.session_state.active_subtopic = sel_subtopic
-            st.session_state.active_node_id = target_node_id
-            st.session_state.refactor_data = generate_refactor_challenge(target_node_id)
-            st.rerun()
-
-    with col_m2:
-        if st.button("Text-Based PBQ Log Analysis", use_container_width=True):
-            st.session_state.app_mode = "pbq_tester"
-            st.session_state.active_domain = sel_domain
-            st.session_state.active_subtopic = sel_subtopic
-            st.session_state.active_node_id = target_node_id
-            st.session_state.pbq_data = generate_pbq_scenario(target_node_id)
-            st.rerun()
-
-# --- Mock Exam Mode View ---
 elif st.session_state.app_mode == "exam_mode":
     st.markdown(f'<div class="chat-header">CompTIA Security+ Mock Exam Simulation (45 Items)</div>', unsafe_allow_html=True)
     
@@ -378,7 +351,7 @@ elif st.session_state.app_mode == "exam_mode":
         st.sidebar.info("⏱️ Simulation mode active: 45-minute pacing monitored.")
 
     if not st.session_state.exam_question_pool:
-        with st.spinner("Initializing 45-question CompTIA Security+ examination pool (Front-Loaded Open PBQs, Acronyms & MCQs)..."):
+        with st.spinner("Initializing 45-question CompTIA Security+ examination pool..."):
             st.session_state.exam_question_pool = load_questions_from_syllabus_and_nodes()
         st.session_state.exam_current_index = 0
         st.session_state.exam_user_answers = {}
@@ -402,7 +375,7 @@ elif st.session_state.app_mode == "exam_mode":
             
             current_ans = st.session_state.exam_user_answers.get(idx, "")
             user_analysis = st.text_area(
-                "Provide your written troubleshooting analysis (Attack Vector, Protocol, Technical Remediation):",
+                "Provide your written troubleshooting analysis:",
                 value=current_ans,
                 height=180,
                 key=f"exam_pbq_text_{idx}"
@@ -442,7 +415,7 @@ elif st.session_state.app_mode == "exam_mode":
         missed_domains = set()
         missed_questions_text = []
         
-        with st.spinner("Grading examination items and analyzing written PBQ log troubleshooting..."):
+        with st.spinner("Grading examination items..."):
             for i, q in enumerate(pool):
                 user_ans = st.session_state.exam_user_answers.get(i, "")
                 is_pbq = q.get("type") == "pbq"
@@ -495,40 +468,16 @@ elif st.session_state.app_mode == "exam_mode":
         
         if pbq_total > 0:
             avg_pbq = pbq_scores_sum / pbq_total
-            st.info(f"🔥 **Front-Loaded PBQ Log Analysis Performance:** Average Score: {avg_pbq:.1f}/100. Evaluated via rigorous written technical troubleshooting analysis.")
+            st.info(f"🔥 **Front-Loaded PBQ Log Analysis Performance:** Average Score: {avg_pbq:.1f}/100.")
 
         st.markdown("### Granular Domain Performance Breakdown:")
         for dom, stats in domain_stats.items():
             dom_pct = (stats["correct"] / stats["total"]) * 100 if stats["total"] > 0 else 0
             st.markdown(f"- **{dom}:** {stats['correct']}/{stats['total']} correct ({dom_pct:.0f}%)")
 
-        st.markdown("### 🧠 Granular Examiner Misconception & Literacy Analysis:")
-        
-        true_missed_domains = [dom for dom, stats in domain_stats.items() if (stats["correct"] / stats["total"]) < 0.75]
-
-        if true_missed_domains:
-            missed_list_str = ", ".join(true_missed_domains)
-            
-            flagged_acronyms = []
-            combined_missed_blob = " ".join(missed_questions_text)
-            potential_acros = re.findall(r'\b[A-Z]{2,6}\b', combined_missed_blob)
-            
-            stopwords = {"TCP", "SYN", "GET", "HTTP", "PDF", "API"}
-            unique_acron_gaps = [a for a in list(set(potential_acros)) if a not in stopwords][:6]
-            acronym_str = ", ".join(unique_acron_gaps) if unique_acron_gaps else "SIEM, PKI, LDAP, RPO/RTO"
-
-            st.warning(
-                f"**Targeted Conceptual Gaps Identified:** Your performance dropped below threshold in: **{missed_list_str}**.\n\n"
-                f"• **Key Acronyms & Terms to Review:** `{acronym_str}`\n"
-                "• **Technical Recommendations:** Review specific protocol headers, secure deployment boundaries, "
-                "and log anomaly signatures for these specific weak domains."
-            )
-        else:
-            st.success("Flawless technical execution! Zero conceptual misconceptions or domain gaps detected.")
-
         log_session_to_supabase(
             unit="Mock Exam Simulation",
-            subtopic="45-Item Diagnostic (Open PBQs, Acronyms, MCQs)",
+            subtopic="45-Item Diagnostic",
             app_mode="exam_mode",
             score_pct=percentage * 100.0,
             misconception_flag=0 if passed else 1
@@ -542,7 +491,6 @@ elif st.session_state.app_mode == "exam_mode":
     if st.button("Exit to Main Menu", use_container_width=True):
         reset_session()
 
-# --- Freestyle Input View ---
 elif st.session_state.app_mode == "freestyle_input":
     st.markdown(f'<div class="chat-header">Freestyle Security+ Scenario Practice</div>', unsafe_allow_html=True)
     st.subheader("Formulate Any Custom Enterprise Cyber Scenario")
@@ -551,9 +499,6 @@ elif st.session_state.app_mode == "freestyle_input":
     with st.expander("Suggested Prompt & Exemplar Prompting Style", expanded=True):
         st.info(f"**Instruction:** {suggested.get('instruction', '')}")
         st.code(suggested.get("suggested_prompt", ""), language="text")
-        st.markdown("**Prompting Tips:**")
-        for tip in suggested.get("tips", []):
-            st.markdown(f"• {tip}")
 
     custom_input = st.text_area(
         "Enter your custom scenario or investigation query:",
@@ -585,7 +530,7 @@ elif st.session_state.app_mode == "freestyle_input":
                     st.session_state.freestyle_focus = freestyle_focus
                     st.rerun()
                 else:
-                    st.error(f"**Domain Alignment Guardrail:** {alignment.get('reasoning', 'Topic out of Security+ scope.')}")
+                    st.error(f"**Domain Alignment Guardrail:** {alignment.get('reasoning', 'Topic out of scope.')}")
             else:
                 st.warning("Please enter a scenario prompt first.")
 
@@ -593,7 +538,6 @@ elif st.session_state.app_mode == "freestyle_input":
         if st.button("Cancel / Back to Objective Selection", use_container_width=True):
             reset_session()
 
-# --- Socratic Drill View ---
 elif st.session_state.app_mode == "socratic_drill":
     st.markdown(f'<div class="chat-header">Orthology Socratic Coach</div>', unsafe_allow_html=True)
     
@@ -621,9 +565,6 @@ elif st.session_state.app_mode == "socratic_drill":
     with st.expander("Suggested Prompt & Exemplar Writing Style", expanded=False):
         st.info(suggested.get("instruction", ""))
         st.code(suggested.get("suggested_prompt", ""), language="text")
-        st.markdown("**Prompting Guidance:**")
-        for tip in suggested.get("tips", []):
-            st.markdown(f"• {tip}")
 
     if len(st.session_state.messages) == 0:
         if st.session_state.is_freestyle:
@@ -646,7 +587,6 @@ elif st.session_state.app_mode == "socratic_drill":
         st.session_state.messages.append({"role": "student", "content": user_input})
         st.rerun()
 
-    # Instant Token Streaming (Blocking status spinner removed for maximum performance)
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "student":
         if st.session_state.is_freestyle:
             generator = stream_freestyle_socratic_response(
@@ -672,7 +612,7 @@ elif st.session_state.app_mode == "socratic_drill":
         st.subheader("Final Mastery Synthesis (6-Point Check)")
 
         if st.session_state.socratic_synthesis_q is None:
-            with st.spinner("Generating synthesis prompt based on session transcript..."):
+            with st.spinner("Generating synthesis prompt..."):
                 st.session_state.socratic_synthesis_q = generate_socratic_synthesis_prompt(
                     sub_topic=st.session_state.active_subtopic,
                     chat_history=st.session_state.messages
@@ -722,7 +662,6 @@ elif st.session_state.app_mode == "socratic_drill":
             if st.button("Start New Session", use_container_width=True):
                 reset_session()
 
-# --- Response Refactor View ---
 elif st.session_state.app_mode == "response_refactor":
     st.markdown(f'<div class="chat-header">Response Refactor Challenge</div>', unsafe_allow_html=True)
     
@@ -787,7 +726,6 @@ elif st.session_state.app_mode == "response_refactor":
             else:
                 st.markdown("---")
                 st.subheader("Upgrade Your Refactored Response")
-                st.caption("Refine your answer by incorporating the missing terms and correcting any remaining inaccuracies highlighted above:")
                 
                 retry_text = st.text_area(
                     "Revised Refactored Answer:", 
@@ -824,7 +762,6 @@ elif st.session_state.app_mode == "response_refactor":
         if st.button("Select Another Objective", use_container_width=True):
             reset_session()
 
-# --- PBQ Log Tester View ---
 elif st.session_state.app_mode == "pbq_tester":
     st.markdown(f'<div class="chat-header">Text-Based PBQ Log Analysis</div>', unsafe_allow_html=True)
     
@@ -838,11 +775,11 @@ elif st.session_state.app_mode == "pbq_tester":
     st.subheader("Log Snippet")
     st.code(pbq_data.get("log_snippet", ""), language="text")
 
-    student_analysis = st.text_area("Provide your 3-part analysis (Attack Vector, OSI/Protocol, Mitigation):", height=200)
+    student_analysis = st.text_area("Provide your 3-part analysis:", height=200)
 
     if st.button("Submit PBQ Analysis", type="primary", use_container_width=True):
         if student_analysis.strip():
-            with st.spinner("Grading log analysis against Security+ rubrics..."):
+            with st.spinner("Grading log analysis..."):
                 results = grade_pbq_response(
                     node_id=st.session_state.active_node_id or "",
                     log_snippet=pbq_data.get("log_snippet", ""),
@@ -866,3 +803,70 @@ elif st.session_state.app_mode == "pbq_tester":
         st.info(f"**Examiner Feedback:** {res.get('examiner_feedback', '')}")
         if st.button("Select Another Objective", use_container_width=True):
             reset_session()
+
+else:
+    # --- Home / Main Menu Screen ---
+    st.markdown(f'<div class="chat-header">Orthology Socratic Engine — {COURSE_TITLE} ({EXAM_CODE})</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+        <div class="purpose-banner">
+            <b>Uncapped Socratic Assessment:</b> This engine tests technical precision, mandatory acronym usage, 
+            and architectural reasoning for CompTIA Security+. Select a domain objective or launch a freestyle scenario to begin.
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.subheader("Select Objective Target")
+    
+    domains_dict = COURSE_SPEC.get("domains", {})
+    if domains_dict:
+        sel_domain = st.selectbox("Step 1: Select Security+ Domain:", options=list(domains_dict.keys()))
+        sub_list = domains_dict.get(sel_domain, [])
+        sel_subtopic = st.selectbox("Step 2: Select Sub-Objective:", options=sub_list)
+        
+        target_node_id = "1.2_fundamental_security_concepts"
+        for node in COMPTIA_NODES:
+            if node.get("domain") == sel_domain:
+                sub_obj_text = node.get("sub_objective", "")
+                node_code = node.get("node_id", "").split("_")[0]
+                if sel_subtopic.startswith(node_code) or sel_subtopic in sub_obj_text:
+                    target_node_id = node.get("node_id")
+                    break
+    else:
+        sel_domain = "1.0 General Security Concepts"
+        sel_subtopic = "1.2 Summarize fundamental security concepts"
+        target_node_id = "1.2_fundamental_security_concepts"
+
+    st.write("")
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("Start Guided Socratic Drill", type="primary", use_container_width=True):
+            st.session_state.app_mode = "socratic_drill"
+            st.session_state.is_freestyle = False
+            st.session_state.active_domain = sel_domain
+            st.session_state.active_subtopic = sel_subtopic
+            st.session_state.active_node_id = target_node_id
+            st.rerun()
+
+    with col_btn2:
+        if st.button("Start Freestyle Scenario Practice", type="primary", use_container_width=True):
+            st.session_state.app_mode = "freestyle_input"
+            st.rerun()
+
+    st.write("---")
+    st.subheader("Specialized Practice Modes")
+
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        if st.button("Refactor Flawed Response", use_container_width=True):
+            st.session_state.app_mode = "response_refactor"
+            st.session_state.active_domain = sel_domain
+            st.session_state.active_subtopic = sel_subtopic
+            st.session_state.active_node_id = target_node_id
+            st.session_state.refactor_data = generate_refactor_challenge(target_node_id)
+            st.rerun()
+
+    with col_m2:
+        if st.button("Text-Based PBQ Log Analysis", use_container_width=True):
+            st.session_state.app_mode = "pbq_tester"
+            st.session_state

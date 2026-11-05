@@ -15,9 +15,9 @@ except Exception:
 engine = create_engine(DB_URL, pool_pre_ping=True, echo=False)
 Base = declarative_base()
 
-# --- 2. Matching Science ORM Schema ---
+# --- 2. Matching CompTIA Security+ ORM Schema ---
 class ActivityLog(Base):
-    __tablename__ = "activity_logs"
+    __tablename__ = "activity_logs_comptia_csp"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
@@ -31,86 +31,83 @@ class ActivityLog(Base):
     keywords_missed = Column(Text, nullable=True)
     misconception_flag = Column(Integer, default=0)
 
-APP_MODES = ["socratic", "quiz", "extended", "rewrite"]
+APP_MODES = ["socratic_drill", "response_refactor", "pbq_tester", "exam_mode"]
 
-# --- 3. CS Keyword Map ---
-CS_KEYWORD_MAP = {
-    "1.1.1 Structure and function of the processor": {
-        "keywords": ["ALU", "Control Unit", "Registers", "PC", "MAR", "MDR", "CIR", "ACC", "Buses", "FDE Cycle", "Pipelining"],
+# --- 3. Security+ Acronym & Keyword Map ---
+SECURITY_KEYWORD_MAP = {
+    "1.1 Compare and contrast various security control types": {
+        "keywords": ["Preventive", "Detective", "Corrective", "Deterrent", "Compensating", "Physical", "Technical", "Administrative"],
     },
-    "1.2.1 Systems Software": {
-        "keywords": ["OS", "Memory Management", "Paging", "Segmentation", "Virtual Memory", "Interrupts", "ISR", "Scheduling"],
+    "1.2 Summarize fundamental security concepts": {
+        "keywords": ["CIA Triad", "Confidentiality", "Integrity", "Availability", "Non-repudiation", "Zero Trust", "Least Privilege", "Defense-in-Depth"],
     },
-    "1.3.1 Compression, Encryption and Hashing": {
-        "keywords": ["Lossy", "Lossless", "Run Length Encoding", "Dictionary Coding", "Symmetric Encryption", "Asymmetric Encryption"],
+    "2.1 Compare and contrast threat actor types and intelligence sources": {
+        "keywords": ["APT", "Insider Threat", "Script Kiddie", "Hacktivist", "OSINT", "Threat Intelligence", "STIX", "TAXII"],
     },
-    "1.4.2 Data Structures": {
-        "keywords": ["Array", "Linked List", "Stack", "Queue", "Binary Search Tree", "Graph", "Hash Table", "Pointers"],
+    "2.2 Explain vulnerability scanning and penetration testing concepts": {
+        "keywords": ["CVSS", "False Positive", "Credentialed Scan", "Black Box", "White Box", "Gray Box", "Rules of Engagement", "Penetration Testing"],
     },
-    "2.1.1 Thinking abstractly": {
-        "keywords": ["Abstraction", "Reality Modelling", "Information Hiding", "Simplification"],
+    "3.1 Implement secure network architecture concepts": {
+        "keywords": ["DMZ", "VLAN", "Subnetting", "NAT", "VPN", "Zero Trust Network Architecture", "Microsegmentation", "WAF"],
     },
-    "2.2.1 Programming techniques": {
-        "keywords": ["Recursion", "Call Stack", "Base Case", "Scope", "By Value", "By Reference", "OOP", "Encapsulation"],
+    "3.4 Summarize secure cryptographic solutions": {
+        "keywords": ["AES", "RSA", "SHA-256", "PKI", "Salting", "Hashing", "Symmetric", "Asymmetric", "Digital Signature"],
     },
-    "2.3.1 Algorithms": {
-        "keywords": ["Big-O Complexity", "Bubble Sort", "Insertion Sort", "Merge Sort", "Quick Sort", "Binary Search", "Dijkstra"],
+    "4.1 Implement identity and access management": {
+        "keywords": ["IAM", "MFA", "SSO", "RBAC", "ABAC", "LDAP", "Kerberos", "OAuth", "SAML", "Federation"],
+    },
+    "4.2 Explain basic incident response processes": {
+        "keywords": ["Containment", "Eradication", "Lessons Learned", "Chain of Custody", "Forensic Image", "Playbooks", "SIEM", "EDR"],
+    },
+    "5.1 Summarize elements of governance, risk, and compliance": {
+        "keywords": ["GDPR", "HIPAA", "PCI-DSS", "Risk Tolerance", "Risk Mitigation", "Business Impact Analysis", "RTO", "RPO"],
     }
 }
 
-DEFAULT_KEYWORDS = ["Specification Concepts", "Syntax Mechanics", "Execution Logic", "Trace Evaluation"]
+DEFAULT_KEYWORDS = ["CIA Triad", "Access Control", "Risk Assessment", "Mitigation Strategy"]
 
 # --- 4. Generation Logic ---
 def generate_synthetic_data(num_records=1800):
-    # Ensure table exists in Supabase/PostgreSQL before seeding
     Base.metadata.create_all(engine)
 
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    spec_path = "course_spec.json"
+    spec_path = "comptia_secplus_spec.json"
     if os.path.exists(spec_path):
         with open(spec_path, "r", encoding="utf-8") as f:
             course_spec = json.load(f)
     else:
-        print("Error: course_spec.json not found.")
+        print("Error: comptia_secplus_spec.json not found.")
         return
 
-    subject_title = course_spec.get("course_title", "OCR A-Level Computer Science")
-    course_level = course_spec.get("level", "A-Level")
+    subject_title = course_spec.get("course_title", "CompTIA Security+")
+    exam_code = course_spec.get("code", "SY0-701")
+    full_subject_name = f"{subject_title} ({exam_code})"
+    course_level = course_spec.get("target_audience", "Adult Professional")
 
-    # Adaptively handle 2-tier or 3-tier course_spec.json structures
-    raw_structure = course_spec.get("subjects") or course_spec.get("topics", {})
-    if not raw_structure:
-        print("Warning: course_spec.json has no topics or subjects.")
+    domains_dict = course_spec.get("domains", {})
+    if not domains_dict:
+        print("Error: comptia_secplus_spec.json has no domains defined.")
         return
-
-    first_key = next(iter(raw_structure), None)
-    is_three_tier = isinstance(raw_structure.get(first_key), dict) if first_key else False
 
     topic_pool = []
-    if is_three_tier:
-        for subj_key, units_dict in raw_structure.items():
-            for unit_key, subtopics in units_dict.items():
-                for subtopic in subtopics:
-                    topic_pool.append((unit_key, subtopic))
-    else:
-        for unit_key, subtopics in raw_structure.items():
-            for subtopic in subtopics:
-                topic_pool.append((unit_key, subtopic))
+    for domain_name, subtopics in domains_dict.items():
+        for subtopic in subtopics:
+            topic_pool.append((domain_name, subtopic))
 
     if not topic_pool:
-        print("Error: No subtopics extracted from specification.")
+        print("Error: No sub-objectives extracted from specification.")
         return
 
-    print(f"Seeding {num_records} activity logs matching DDL schema for '{subject_title}'...")
+    print(f"Seeding {num_records} activity logs for '{full_subject_name}' into table 'activity_logs_comptia_csp'...")
 
     start_date = datetime.utcnow() - timedelta(days=30)
 
     for _ in range(num_records):
-        unit_name, subtopic_name = random.choice(topic_pool)
+        domain_name, subtopic_name = random.choice(topic_pool)
 
-        domain_meta = CS_KEYWORD_MAP.get(subtopic_name, {"keywords": DEFAULT_KEYWORDS})
+        domain_meta = SECURITY_KEYWORD_MAP.get(subtopic_name, {"keywords": DEFAULT_KEYWORDS})
         app_mode = random.choice(APP_MODES)
 
         base_score = random.choices([40.0, 55.0, 70.0, 85.0, 100.0], weights=[0.1, 0.25, 0.35, 0.2, 0.1])[0]
@@ -122,19 +119,19 @@ def generate_synthetic_data(num_records=1800):
         used_kw = all_kw[:num_used]
         missed_kw = all_kw[num_used:]
 
-        misconception_flag = 1 if score_pct < 45.0 else 0
+        misconception_flag = 1 if score_pct < 50.0 else 0
 
         timestamp = start_date + timedelta(
             days=random.randint(0, 29),
-            hours=random.randint(8, 17),
+            hours=random.randint(8, 22),
             minutes=random.randint(0, 59)
         )
 
         log = ActivityLog(
             timestamp=timestamp,
-            subject=subject_title,
+            subject=full_subject_name,
             level=course_level,
-            unit=unit_name,
+            unit=domain_name,
             subtopic=subtopic_name,
             app_mode=app_mode,
             score_pct=round(score_pct, 1),
@@ -147,7 +144,7 @@ def generate_synthetic_data(num_records=1800):
 
     session.commit()
     session.close()
-    print(f"Successfully populated {num_records} activity logs into PostgreSQL!")
+    print(f"Successfully populated {num_records} activity logs into 'activity_logs_comptia_csp'!")
 
 if __name__ == "__main__":
-    generate_synthetic_data(1800)
+    generate_synthetic_data(1)
