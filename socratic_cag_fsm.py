@@ -82,9 +82,6 @@ COURSE_TITLE = COURSE_SPEC.get("course_title", "CompTIA Security+")
 EXAM_CODE = COURSE_SPEC.get("code", "SY0-701")
 MODEL_NAME = "gemini-3.8-flash"
 
-# Global Cache Handle for Server-Side KV Caching
-_CAG_CACHE_HANDLE = None
-
 # Module-level memory cache for exam pool generation efficiency
 _CACHED_EXAM_POOL = None
 
@@ -213,13 +210,9 @@ def get_suggested_prompts(mode: str, node_id: str = "") -> Dict[str, Any]:
     return {}
 
 
-# --- CAG Context Cache Management ---
-def get_or_create_cag_cache() -> types.CachedContent:
-    """Pre-loads the Security+ course spec, node definitions, and syllabus PDFs into a server-side KV cache."""
-    global _CAG_CACHE_HANDLE
-    if _CAG_CACHE_HANDLE is not None:
-        return _CAG_CACHE_HANDLE
-
+# --- Direct System Context Loader (Bypasses Explicit Cache Errors) ---
+def get_system_context() -> str:
+    """Loads course specs and syllabus documents for direct injection."""
     spec_content = json.dumps(COURSE_SPEC, indent=2) if COURSE_SPEC else "CompTIA Security+ SY0-701 Spec"
     nodes_content = json.dumps(COMPTIA_NODES, indent=2) if COMPTIA_NODES else "CompTIA Nodes Repository"
 
@@ -231,21 +224,17 @@ def get_or_create_cag_cache() -> types.CachedContent:
             if file_path.suffix.lower() == ".pdf":
                 try:
                     reader = PdfReader(file_path)
-                    pdf_text = []
-                    for page in reader.pages:
-                        t = page.extract_text()
-                        if t:
-                            pdf_text.append(t)
+                    pdf_text = [page.extract_text() for page in reader.pages if page.extract_text()]
                     if pdf_text:
                         syllabus_docs.append(f"--- DOCUMENT: {file_path.name} ---\n" + "\n".join(pdf_text))
-                except Exception as e:
-                    print(f"Warning: Could not parse {file_path.name}: {e}")
+                except Exception:
+                    pass
             elif file_path.suffix.lower() in [".json", ".txt", ".md"]:
                 syllabus_docs.append(f"--- DOCUMENT: {file_path.name} ---\n" + file_path.read_text(encoding="utf-8"))
 
     combined_syllabus_text = "\n\n".join(syllabus_docs)
 
-    full_system_context = f"""
+    return f"""
     You are an expert CompTIA Security+ ({EXAM_CODE}) Socratic Engine and Lead Cyber Specialist.
     
     === COURSE SPECIFICATION ===
@@ -258,18 +247,8 @@ def get_or_create_cag_cache() -> types.CachedContent:
     {combined_syllabus_text}
     
     PEDAGOGICAL DIRECTIVE:
-    Target adult cybersecurity professionals. Demand exact technical precision in terminology (e.g., distinguishing WAF from Stateful Firewall, or Encryption from Hashing). Maintain an uncapped Socratic interaction until the student accurately proves mastery. Keep questions concise and rigorous.
+    Target adult cybersecurity professionals. Demand exact technical precision in terminology. Maintain an uncapped Socratic interaction until the student accurately proves mastery. Keep questions concise and rigorous.
     """
-
-    _CAG_CACHE_HANDLE = client.caches.create(
-        model=MODEL_NAME,
-        config=types.CreateCachedContentConfig(
-            contents=[full_system_context],
-            ttl="7200s",
-            display_name=f"cag_cache_{EXAM_CODE.lower()}"
-        )
-    )
-    return _CAG_CACHE_HANDLE
 
 
 def extract_clean_text(response) -> str:
@@ -296,9 +275,9 @@ def convert_messages_to_contents(messages: list) -> list:
     return contents
 
 
-# --- High-Speed Uncapped Socratic Engine Streaming (Anti-Cutoff Enhanced) ---
+# --- High-Speed Uncapped Socratic Engine Streaming (Direct Context) ---
+# --- High-Speed Uncapped Socratic Engine Streaming (Direct Context) ---
 def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
-    cache = get_or_create_cag_cache()
     node = get_node_by_id(node_id)
     kt, ac = ", ".join(node.get("key_terms", [])), ", ".join(node.get("required_acronyms", []))
     
@@ -308,24 +287,24 @@ def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
         f"Required Key Terms: {kt}\n"
         f"Required Acronyms: {ac}\n\n"
         f"MANDATORY BEHAVIORAL RULES:\n"
-        f"1. This is an ongoing, deep Socratic dialogue. DO NOT conclude the session, DO NOT say 'dialogue complete', and DO NOT provide final grading or summary yet.\n"
-        f"2. Keep the Socratic pressure active. Probe deeper into operational mechanics, edge cases, or failure modes rather than wrapping up prematurely.\n"
+        f"1. This is an ongoing, deep Socratic dialogue. DO NOT conclude the session or provide final grading yet.\n"
+        f"2. Keep the Socratic pressure active. Probe deeper into operational mechanics, edge cases, or failure modes.\n"
         f"3. MANDATORY: Wrap every instance of these key terms/acronyms in markdown bold (e.g., **AUP**, **ACL**).\n"
         f"4. Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge question. Complete all sentences."
     )
     
-    config = types.GenerateContentConfig(
-        cached_content=cache.name, 
-        temperature=0.3, 
-        max_output_tokens=1000
-    )
-    
+    system_instruction = get_system_context()
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=directive)])] + convert_messages_to_contents(messages)
+    
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction,
+        temperature=0.3, 
+        max_output_tokens=2048
+    )
     
     for chunk in client.models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config):
         if chunk.text: 
             yield chunk.text
-
 
 # --- Freestyle Practice Mode Helpers ---
 def stream_freestyle_socratic_response(
@@ -334,8 +313,6 @@ def stream_freestyle_socratic_response(
     focus_mode: str
 ) -> Generator[str, None, None]:
     """Streams Socratic guidance for unscripted freestyle practice with full token headroom."""
-    cache = get_or_create_cag_cache()
-
     directive = (
         f"[EXAMINER DIRECTIVE - FREESTYLE SOCRATIC MODE]\n"
         f"Unscripted Practice Prompt: \"{custom_prompt}\"\n"
@@ -345,10 +322,11 @@ def stream_freestyle_socratic_response(
         f"Complete all sentences fully."
     )
 
+    system_instruction = get_system_context()
     config = types.GenerateContentConfig(
-        cached_content=cache.name,
+        system_instruction=system_instruction,
         temperature=0.3,
-        max_output_tokens=1000
+        max_output_tokens=2048
     )
 
     contents = convert_messages_to_contents(messages)
@@ -367,7 +345,7 @@ def stream_freestyle_socratic_response(
 
 def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
     """Verifies whether a user-entered freestyle prompt aligns with CompTIA Security+ / Cybersecurity."""
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
     system_prompt = f"""
     You are an AI curriculum alignment filter for {COURSE_TITLE} ({EXAM_CODE}).
     Analyze the user input and determine if it falls within the scope of cybersecurity, enterprise architecture, threats, or security operations.
@@ -380,7 +358,7 @@ def verify_topic_alignment(custom_prompt: str) -> Dict[str, Any]:
     }}
     """
     config = types.GenerateContentConfig(
-        cached_content=cache.name,
+        system_instruction=system_instruction,
         temperature=0.0
     )
 
@@ -414,10 +392,10 @@ def generate_refactor_challenge(node_id: str) -> Dict[str, str]:
             "reference_solution": node.get("refactor_sample_corrected_text", "")
         }
 
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
     prompt = f"Generate a flawed, vague response written by an amateur candidate for sub-objective '{node_id}'. Return JSON with 'flawed_text' and 'reference_solution'."
     
-    config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.3)
+    config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.3, max_output_tokens=2048)
     response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
     
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
@@ -426,7 +404,7 @@ def generate_refactor_challenge(node_id: str) -> Dict[str, str]:
 
 def grade_refactored_response(node_id: str, flawed_text: str, student_refactor: str) -> Dict[str, Any]:
     """Evaluates the student's refactored response for terminology and conceptual accuracy."""
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
     node = get_node_by_id(node_id)
 
     prompt = f"""
@@ -452,7 +430,7 @@ def grade_refactored_response(node_id: str, flawed_text: str, student_refactor: 
     }}
     """
 
-    config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.0)
+    config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.0, max_output_tokens=2048)
     response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
     
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
@@ -475,7 +453,7 @@ def generate_pbq_scenario(node_id: str) -> Dict[str, Any]:
 
 def grade_pbq_response(node_id: str, log_snippet: str, student_analysis: str) -> Dict[str, Any]:
     """Grades student log analysis against CompTIA objectives."""
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
     node = get_node_by_id(node_id)
 
     prompt = f"""
@@ -499,7 +477,7 @@ def grade_pbq_response(node_id: str, log_snippet: str, student_analysis: str) ->
     }}
     """
 
-    config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.0)
+    config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.0, max_output_tokens=2048)
     response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
     
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
@@ -516,7 +494,7 @@ def load_questions_from_syllabus_and_nodes() -> list:
     pool = []
     
     try:
-        cache = get_or_create_cag_cache()
+        system_instruction = get_system_context()
         prompt = f"""
         You are an expert CompTIA Security+ ({EXAM_CODE}) senior certification examiner.
         Generate a comprehensive, precisely balanced set of 45 mock exam items.
@@ -544,7 +522,7 @@ def load_questions_from_syllabus_and_nodes() -> list:
           }}
         ]
         """
-        config = types.GenerateContentConfig(cached_content=cache.name, temperature=0.3)
+        config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.3, max_output_tokens=8192)
         response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
         clean_json = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
         generated_items = json.loads(clean_json)
@@ -591,7 +569,7 @@ def load_questions_from_syllabus_and_nodes() -> list:
 def socratic_tutor(state: ChatState) -> dict:
     sub_topic = state.get("sub_topic", COURSE_TITLE)
     node_id = state.get("node_id", "")
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
     node = get_node_by_id(node_id)
 
     directive = f"""[SYSTEM DIRECTIVE]
@@ -605,8 +583,9 @@ TUTORING MANDATE:
 """
 
     config = types.GenerateContentConfig(
-        cached_content=cache.name,
-        temperature=0.2
+        system_instruction=system_instruction,
+        temperature=0.2,
+        max_output_tokens=2048
     )
 
     contents = convert_messages_to_contents(state["messages"])
@@ -623,7 +602,7 @@ TUTORING MANDATE:
 
 def didactic_fallback(state: ChatState) -> dict:
     sub_topic = state.get("sub_topic", "")
-    cache = get_or_create_cag_cache()
+    system_instruction = get_system_context()
 
     directive = f"""[SYSTEM DIRECTIVE]
 You are a Lead CompTIA Security+ ({EXAM_CODE}) Senior Examiner concluding a Socratic session.
@@ -643,8 +622,9 @@ FORMAT YOUR OUTPUT EXACTLY AS FOLLOWS:
 """
 
     config = types.GenerateContentConfig(
-        cached_content=cache.name,
-        temperature=0.2
+        system_instruction=system_instruction,
+        temperature=0.2,
+        max_output_tokens=2048
     )
 
     contents = convert_messages_to_contents(state["messages"])
@@ -693,6 +673,7 @@ def generate_socratic_synthesis_prompt(sub_topic: str, chat_history: list) -> di
         transcript_lines.append(f"{role}: {content}")
     full_transcript = "\n".join(transcript_lines)
 
+    system_instruction = get_system_context()
     prompt = f"""
     Target Subtopic: {sub_topic}
     TRANSCRIPT:
@@ -714,7 +695,7 @@ def generate_socratic_synthesis_prompt(sub_topic: str, chat_history: list) -> di
     }}
     """
 
-    config = types.GenerateContentConfig(temperature=0.2)
+    config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.2, max_output_tokens=2048)
     response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
 
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()
@@ -725,6 +706,7 @@ def evaluate_socratic_synthesis(question: str, mark_scheme: list, student_answer
     """Evaluates final synthesis answer."""
     ms_text = "\n".join([f"- Point {i+1}: {pt}" for i, pt in enumerate(mark_scheme)])
     
+    system_instruction = get_system_context()
     prompt = f"""
     Task Prompt: {question}
     Rubric:
@@ -745,7 +727,7 @@ def evaluate_socratic_synthesis(question: str, mark_scheme: list, student_answer
     }}
     """
 
-    config = types.GenerateContentConfig(temperature=0.0)
+    config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.0, max_output_tokens=2048)
     response = client.models.generate_content(model=MODEL_NAME, contents=prompt, config=config)
 
     clean_text = re.sub(r"```json|```", "", extract_clean_text(response)).strip()

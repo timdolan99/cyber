@@ -5,7 +5,6 @@ from datetime import datetime
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
-from sqlalchemy.orm import declarative_base, sessionmaker
 from analytics_dashboard import render_analytics_dashboard
 
 # --- Orthology Branding Setup ---
@@ -50,7 +49,7 @@ if os.path.exists(LOGO_PATH):
     with col2:
         st.image(LOGO_PATH, use_container_width=True)
 
-# Ensure API Key is set BEFORE loading CAG FSM
+# Ensure API Key is set BEFORE loading backend FSM
 raw_key = st.secrets.get("GOOGLE_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 if isinstance(raw_key, dict):
     raw_key = raw_key.get("GOOGLE_API_KEY") or raw_key.get("GEMINI_API_KEY")
@@ -59,13 +58,6 @@ if raw_key:
     os.environ["GEMINI_API_KEY"] = str(raw_key).strip()
 
 import socratic_cag_fsm as fsm
-
-# --- Warm-up Server-Side Context Cache once on Streamlit Startup ---
-@st.cache_resource
-def init_cag_cache_handle():
-    return fsm.get_or_create_cag_cache()
-
-cag_cache = init_cag_cache_handle()
 
 from socratic_cag_fsm import (
     stream_socratic_response,
@@ -90,6 +82,8 @@ THEME_BANNER_BORDER = "#bbf7d0"   # Soft Green Border
 THEME_BANNER_TEXT = "#166534"     # Dark Green Banner Text
 
 # --- Database & Zero-PII Telemetry Logging Setup ---
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 Base = declarative_base()
 
 class ActivityLog(Base):
@@ -765,30 +759,45 @@ elif st.session_state.app_mode == "response_refactor":
 elif st.session_state.app_mode == "pbq_tester":
     st.markdown(f'<div class="chat-header">Text-Based PBQ Log Analysis</div>', unsafe_allow_html=True)
     
-    pbq_data = st.session_state.get("pbq_data", {})
-    suggested = get_suggested_prompts("pbq_tester", st.session_state.active_node_id or "")
+    # Robust safety check and fallback generation
+    if not st.session_state.get("pbq_data") or not isinstance(st.session_state.pbq_data, dict):
+        try:
+            node_id = st.session_state.get("active_node_id") or "1.2_fundamental_security_concepts"
+            st.session_state.pbq_data = generate_pbq_scenario(node_id)
+        except Exception:
+            st.session_state.pbq_data = None
+            
+    # Absolute fallback dictionary if generation fails or returns None
+    if not st.session_state.get("pbq_data"):
+        st.session_state.pbq_data = {
+            "log_snippet": "FIREWALL_LOG: SRC=192.168.1.105 DST=10.0.4.50 PROTO=TCP SPT=49211 DPT=3389 ACTION=ALLOW\n[WARNING] Multiple failed authentication attempts followed by successful RDP login from external subnet.",
+            "question": "Analyze the log snippet above, identify the potential compromise vector, and outline the necessary remediation steps."
+        }
+    
+    pbq_data = st.session_state.pbq_data
+    suggested = get_suggested_prompts("pbq_tester", st.session_state.get("active_node_id") or "")
 
     with st.expander("View PBQ Analysis Structure", expanded=True):
-        st.info(suggested.get("instruction", ""))
-        st.code(suggested.get("suggested_prompt", ""), language="text")
+        st.info(suggested.get("instruction", "Analyze the scenario and provide structured remediation."))
+        st.code(suggested.get("suggested_prompt", "Identify anomalous indicators and recommend security controls."), language="text")
 
     st.subheader("Log Snippet")
-    st.code(pbq_data.get("log_snippet", ""), language="text")
+    st.code(pbq_data.get("log_snippet", "No log snippet available."), language="text")
 
-    student_analysis = st.text_area("Provide your 3-part analysis:", height=200)
+    student_analysis = st.text_area("Provide your 3-part analysis:", height=200, key="pbq_student_input")
 
     if st.button("Submit PBQ Analysis", type="primary", use_container_width=True):
         if student_analysis.strip():
             with st.spinner("Grading log analysis..."):
                 results = grade_pbq_response(
-                    node_id=st.session_state.active_node_id or "",
+                    node_id=st.session_state.get("active_node_id") or "",
                     log_snippet=pbq_data.get("log_snippet", ""),
                     student_analysis=student_analysis.strip()
                 )
                 st.session_state.pbq_results = results
                 log_session_to_supabase(
-                    unit=st.session_state.active_domain,
-                    subtopic=st.session_state.active_subtopic,
+                    unit=st.session_state.get("active_domain") or "General Domain",
+                    subtopic=st.session_state.get("active_subtopic") or "General Objective",
                     app_mode="pbq_tester",
                     score_pct=results.get("score", 0),
                     keywords_used=results.get("keywords_used", []),
@@ -796,8 +805,10 @@ elif st.session_state.app_mode == "pbq_tester":
                     misconception_flag=0 if results.get("score", 0) >= 70 else 1
                 )
                 st.rerun()
+        else:
+            st.warning("Please provide your analysis before submitting.")
 
-    if st.session_state.pbq_results:
+    if st.session_state.get("pbq_results"):
         res = st.session_state.pbq_results
         st.success(f"**PBQ Score: {res.get('score', 0)} / 100**")
         st.info(f"**Examiner Feedback:** {res.get('examiner_feedback', '')}")
@@ -869,4 +880,11 @@ else:
     with col_m2:
         if st.button("Text-Based PBQ Log Analysis", use_container_width=True):
             st.session_state.app_mode = "pbq_tester"
-            st.session_state
+            st.session_state.active_domain = sel_domain
+            st.session_state.active_subtopic = sel_subtopic
+            st.session_state.active_node_id = target_node_id
+            try:
+                st.session_state.pbq_data = generate_pbq_scenario(target_node_id)
+            except Exception:
+                st.session_state.pbq_data = None
+            st.rerun()
