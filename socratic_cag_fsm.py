@@ -85,6 +85,9 @@ MODEL_NAME = "gemini-3.8-flash"
 # Module-level memory cache for exam pool generation efficiency
 _CACHED_EXAM_POOL = None
 
+# Global cache for parsed syllabus documents to eliminate disk I/O lag
+_CACHED_SYLLABUS_TEXT = None
+
 
 class ChatState(TypedDict, total=False):
     messages: List[BaseMessage]
@@ -210,9 +213,13 @@ def get_suggested_prompts(mode: str, node_id: str = "") -> Dict[str, Any]:
     return {}
 
 
-# --- Direct System Context Loader (Bypasses Explicit Cache Errors) ---
+# --- Direct System Context Loader (Globally Cached to Eliminate Disk I/O Lag) ---
 def get_system_context() -> str:
-    """Loads course specs and syllabus documents for direct injection."""
+    """Loads and caches course specs and syllabus docs globally to eliminate disk I/O lag."""
+    global _CACHED_SYLLABUS_TEXT
+    if _CACHED_SYLLABUS_TEXT is not None:
+        return _CACHED_SYLLABUS_TEXT
+
     spec_content = json.dumps(COURSE_SPEC, indent=2) if COURSE_SPEC else "CompTIA Security+ SY0-701 Spec"
     nodes_content = json.dumps(COMPTIA_NODES, indent=2) if COMPTIA_NODES else "CompTIA Nodes Repository"
 
@@ -234,7 +241,7 @@ def get_system_context() -> str:
 
     combined_syllabus_text = "\n\n".join(syllabus_docs)
 
-    return f"""
+    _CACHED_SYLLABUS_TEXT = f"""
     You are an expert CompTIA Security+ ({EXAM_CODE}) Socratic Engine and Lead Cyber Specialist.
     
     === COURSE SPECIFICATION ===
@@ -249,6 +256,7 @@ def get_system_context() -> str:
     PEDAGOGICAL DIRECTIVE:
     Target adult cybersecurity professionals. Demand exact technical precision in terminology. Maintain an uncapped Socratic interaction until the student accurately proves mastery. Keep questions concise and rigorous.
     """
+    return _CACHED_SYLLABUS_TEXT
 
 
 def extract_clean_text(response) -> str:
@@ -263,19 +271,24 @@ def extract_clean_text(response) -> str:
 
 
 def convert_messages_to_contents(messages: list) -> list:
-    """Converts LangChain messages or dict lists into Google GenAI content format."""
+    """Efficiently converts chat message lists into Google GenAI content format."""
     contents = []
     for msg in messages:
         if isinstance(msg, dict):
             role = "user" if msg.get("role") in ["user", "student"] else "model"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.get("content", ""))]))
+            content_text = msg.get("content", "")
         elif isinstance(msg, BaseMessage):
             role = "user" if isinstance(msg, HumanMessage) else "model"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
+            content_text = msg.content
+        else:
+            continue
+            
+        if content_text:
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=content_text)]))
+            
     return contents
 
 
-# --- High-Speed Uncapped Socratic Engine Streaming (Direct Context) ---
 # --- High-Speed Uncapped Socratic Engine Streaming (Direct Context) ---
 def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
     node = get_node_by_id(node_id)
@@ -290,11 +303,17 @@ def stream_socratic_response(messages: list, sub_topic: str, node_id: str = ""):
         f"1. This is an ongoing, deep Socratic dialogue. DO NOT conclude the session or provide final grading yet.\n"
         f"2. Keep the Socratic pressure active. Probe deeper into operational mechanics, edge cases, or failure modes.\n"
         f"3. MANDATORY: Wrap every instance of these key terms/acronyms in markdown bold (e.g., **AUP**, **ACL**).\n"
-        f"4. Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge question. Complete all sentences."
+        f"4. Provide 3-4 sentences covering accuracy, positives, gaps, and a closing challenge question. Complete all sentences.\n\n"
     )
     
     system_instruction = get_system_context()
-    contents = [types.Content(role="user", parts=[types.Part.from_text(text=directive)])] + convert_messages_to_contents(messages)
+    contents = convert_messages_to_contents(messages)
+    
+    if contents and contents[-1].role == "user":
+        original_text = contents[-1].parts[0].text
+        contents[-1].parts[0].text = directive + original_text
+    else:
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=directive)]))
     
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
@@ -319,18 +338,23 @@ def stream_freestyle_socratic_response(
         f"Focus: {focus_mode}\n\n"
         f"Provide substantive, analytical feedback (3-4 sentences) evaluating the candidate's custom scenario response, "
         f"challenging inaccuracies, and concluding with a sharp probing question without giving away the answer. "
-        f"Complete all sentences fully."
+        f"Complete all sentences fully.\n\n"
     )
 
     system_instruction = get_system_context()
+    contents = convert_messages_to_contents(messages)
+    
+    if contents and contents[-1].role == "user":
+        original_text = contents[-1].parts[0].text
+        contents[-1].parts[0].text = directive + original_text
+    else:
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=directive)]))
+
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
         temperature=0.3,
         max_output_tokens=2048
     )
-
-    contents = convert_messages_to_contents(messages)
-    contents.insert(0, types.Content(role="user", parts=[types.Part.from_text(text=directive)]))
 
     response_stream = client.models.generate_content_stream(
         model=MODEL_NAME,

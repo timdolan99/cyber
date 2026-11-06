@@ -581,21 +581,22 @@ elif st.session_state.app_mode == "socratic_drill":
         st.session_state.messages.append({"role": "student", "content": user_input})
         st.rerun()
 
+    # Optimized streaming block preventing redundant full-page state stalls
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "student":
-        if st.session_state.is_freestyle:
-            generator = stream_freestyle_socratic_response(
-                messages=st.session_state.messages,
-                custom_prompt=st.session_state.freestyle_prompt,
-                focus_mode=st.session_state.freestyle_focus
-            )
-        else:
-            generator = stream_socratic_response(
-                messages=st.session_state.messages,
-                sub_topic=st.session_state.active_subtopic,
-                node_id=st.session_state.active_node_id or ""
-            )
-
         with st.chat_message("assistant"):
+            if st.session_state.is_freestyle:
+                generator = stream_freestyle_socratic_response(
+                    messages=st.session_state.messages,
+                    custom_prompt=st.session_state.freestyle_prompt,
+                    focus_mode=st.session_state.freestyle_focus
+                )
+            else:
+                generator = stream_socratic_response(
+                    messages=st.session_state.messages,
+                    sub_topic=st.session_state.active_subtopic,
+                    node_id=st.session_state.active_node_id or ""
+                )
+
             full_stream = st.write_stream(generator)
 
         st.session_state.messages.append({"role": "tutor", "content": full_stream, "style": "tutor-msg"})
